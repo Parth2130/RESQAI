@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Incident Management & Triage | RESQAI</title>
+  
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/responsive.css">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <!-- Demo Notice Banner -->
+  <div class="demo-banner">
+    <div class="demo-banner-content">
+      <span class="badge-pill">Operational Registry</span>
+      <span>Incident Lifecycle Management • Database-Backed CRUD & Resource Dispatch Operations</span>
+    </div>
+  </div>
+
+  <!-- Navigation Bar -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="index.html" class="nav-brand">
+        <div class="brand-icon">
+          <i data-lucide="shield-alert"></i>
+        </div>
+        <div class="brand-text">
+          <h1>RESQ<span>AI</span></h1>
+          <p>Disaster Response System</p>
+        </div>
+      </a>
+
+      <button class="mobile-toggle" id="mobile-menu-toggle" aria-label="Toggle navigation">
+        <i data-lucide="menu"></i>
+      </button>
+
+      <ul class="nav-menu" id="nav-menu">
+        <li><a href="index.html" class="nav-link"><i data-lucide="home"></i> Home</a></li>
+        <li><a href="dashboard.html" class="nav-link"><i data-lucide="layout-dashboard"></i> Live Dashboard</a></li>
+        <li><a href="incidents.html" class="nav-link active"><i data-lucide="list"></i> Incidents</a></li>
+        <li><a href="report.html" class="nav-link"><i data-lucide="alert-octagon"></i> Report Incident</a></li>
+        <li><a href="map.html" class="nav-link"><i data-lucide="map"></i> Disaster Map</a></li>
+        <li><a href="resources.html" class="nav-link"><i data-lucide="truck"></i> Resources</a></li>
+        <li><a href="shelters.html" class="nav-link"><i data-lucide="home"></i> Shelters</a></li>
+        <li><a href="analytics.html" class="nav-link"><i data-lucide="bar-chart-3"></i> Analytics</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <div id="system-health-pill" class="health-indicator health-online">
+          <span class="health-dot"></span>
+          <span>API Online</span>
+        </div>
+
+        <div class="alerts-wrapper">
+          <button class="btn-icon" id="alerts-toggle-btn" aria-label="Operational Notifications">
+            <i data-lucide="bell"></i>
+            <span class="badge-counter" id="alerts-badge" style="display: none;">0</span>
+          </button>
+          
+          <div class="alerts-dropdown" id="alerts-dropdown-menu">
+            <div class="alerts-header">
+              <h4>Operations Alerts</h4>
+              <button class="btn-text-link" id="mark-all-alerts-read">Mark all read</button>
+            </div>
+            <div class="alerts-list" id="alerts-list-container">
+              <div class="empty-alerts">Loading notifications...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <div class="page-header">
+      <div class="page-title-group">
+        <h2>Active Incident Management</h2>
+        <p>Search, filter, track status transitions, and authorize resource dispatches across reported disaster zones.</p>
+      </div>
+
+      <div class="page-actions">
+        <a href="report.html" class="btn btn-primary btn-sm">
+          <i data-lucide="plus"></i> New Incident Report
+        </a>
+      </div>
+    </div>
+
+    <!-- Filter and Search Control Toolbar -->
+    <div class="card" style="padding: 16px; margin-bottom: 22px;">
+      <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 12px; align-items: center;">
+        
+        <!-- Search Input -->
+        <div>
+          <input type="text" id="incidents-search-input" class="form-control" placeholder="Search by code, title, or sector...">
+        </div>
+
+        <!-- Filter Status -->
+        <div>
+          <select id="filter-status-select" class="form-control">
+            <option value="All">All Statuses</option>
+            <option value="Reported">Reported</option>
+            <option value="Verified">Verified</option>
+            <option value="Assigned">Assigned</option>
+            <option value="Response in Progress">In Progress</option>
+            <option value="Resolved">Resolved</option>
+            <option value="Closed">Closed</option>
+          </select>
+        </div>
+
+        <!-- Filter Severity -->
+        <div>
+          <select id="filter-severity-select" class="form-control">
+            <option value="All">All Severities</option>
+            <option value="Critical">Critical</option>
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+          </select>
+        </div>
+
+        <!-- Filter Type -->
+        <div>
+          <select id="filter-type-select" class="form-control">
+            <option value="All">All Disaster Types</option>
+            <option value="Flood">Flood</option>
+            <option value="Flash flood">Flash flood</option>
+            <option value="Building collapse">Building collapse</option>
+            <option value="Landslide">Landslide</option>
+            <option value="Fire">Fire</option>
+            <option value="Severe weather">Severe weather</option>
+            <option value="Road blockage">Road blockage</option>
+            <option value="Medical emergency">Medical emergency</option>
+          </select>
+        </div>
+
+        <!-- Sort -->
+        <div>
+          <select id="sort-select" class="form-control">
+            <option value="created_at:desc">Newest First</option>
+            <option value="risk_score:desc">Highest Risk First</option>
+            <option value="people_affected:desc">Most Affected</option>
+            <option value="created_at:asc">Oldest First</option>
+          </select>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Incidents Table Card -->
+    <div class="card">
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Incident Code</th>
+              <th>Title & Location</th>
+              <th>Type</th>
+              <th>Severity</th>
+              <th>Risk Score</th>
+              <th>Affected</th>
+              <th>Assigned Unit</th>
+              <th>Status</th>
+              <th>Reported</th>
+              <th style="text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="incidents-table-body">
+            <tr>
+              <td colspan="10" style="text-align: center; padding: 40px;">
+                <div class="spinner spinner-primary"></div>
+                <div style="margin-top: 10px; color: var(--text-secondary);">Loading incidents from database...</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Detailed Incident & Status / Dispatch Modal -->
+  <div class="modal-overlay" id="incident-detail-modal">
+    <div class="modal-dialog" style="max-width: 680px;">
+      <div class="modal-header">
+        <h3 id="detail-modal-title">Incident Details</h3>
+        <button class="modal-close" id="detail-modal-close">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        
+        <!-- Top Status & Code Header -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <div>
+            <span id="detail-modal-code" style="font-weight: 800; font-size: 1.1rem; color: var(--primary);">INC-0000</span>
+            <span id="detail-modal-type-badge" class="alert-badge badge-high" style="margin-left: 8px;">Type</span>
+          </div>
+          <span id="detail-modal-status-badge" class="status-pill status-reported">Reported</span>
+        </div>
+
+        <p id="detail-modal-desc" style="font-size: 0.9rem; color: var(--text-main); margin-bottom: 16px; line-height: 1.5;"></p>
+
+        <!-- Location & Headcounts Grid -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; background: #F8FBFE; padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 18px;">
+          <div>
+            <div style="font-size: 0.74rem; font-weight: 700; color: var(--text-secondary);">LOCATION SECTOR</div>
+            <div id="detail-modal-location" style="font-weight: 700; font-size: 0.88rem; color: var(--text-main); margin-top: 2px;"></div>
+          </div>
+          <div>
+            <div style="font-size: 0.74rem; font-weight: 700; color: var(--text-secondary);">COORDINATES</div>
+            <div id="detail-modal-coords" style="font-size: 0.82rem; color: var(--text-main); margin-top: 2px;"></div>
+          </div>
+          <div>
+            <div style="font-size: 0.74rem; font-weight: 700; color: var(--text-secondary);">PEOPLE AFFECTED</div>
+            <div id="detail-modal-affected" style="font-weight: 700; font-size: 0.88rem; color: var(--text-main); margin-top: 2px;"></div>
+          </div>
+          <div>
+            <div style="font-size: 0.74rem; font-weight: 700; color: var(--text-secondary);">REPORTER INFO</div>
+            <div id="detail-modal-reporter" style="font-size: 0.82rem; color: var(--text-main); margin-top: 2px;"></div>
+          </div>
+        </div>
+
+        <!-- AI Risk Assessment Section -->
+        <div style="background: white; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 18px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="cpu" style="color: var(--primary); width: 16px;"></i> Transparent Risk Assessment
+            </span>
+            <span id="detail-modal-risk-score" style="font-weight: 800; font-size: 0.95rem; color: var(--coral);">Score: 0/100</span>
+          </div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px;">
+            <strong>Priority:</strong> <span id="detail-modal-priority"></span>
+          </div>
+          <ul id="detail-modal-factors" style="font-size: 0.78rem; color: var(--text-secondary); padding-left: 18px;"></ul>
+        </div>
+
+        <!-- Status Update Section -->
+        <div style="border-top: 1px solid var(--border-color); padding-top: 14px; margin-bottom: 18px;">
+          <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); margin-bottom: 8px;">Change Operational Status</h4>
+          <div style="display: flex; gap: 8px;">
+            <select id="modal-status-select" class="form-control" style="max-width: 200px;">
+              <option value="Reported">Reported</option>
+              <option value="Verified">Verified</option>
+              <option value="Assigned">Assigned</option>
+              <option value="Response in Progress">Response in Progress</option>
+              <option value="Resolved">Resolved</option>
+              <option value="Closed">Closed</option>
+            </select>
+            <input type="text" id="modal-status-note" class="form-control" placeholder="Optional audit remark or field update...">
+            <button class="btn btn-primary btn-sm" id="btn-save-status-change" style="white-space: nowrap;">
+              Update Status
+            </button>
+          </div>
+        </div>
+
+        <!-- Dispatch Recommendation & Assignment Section -->
+        <div style="border-top: 1px solid var(--border-color); padding-top: 14px; margin-bottom: 18px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-main);">Assigned Rescue Asset</h4>
+            <button class="btn btn-secondary btn-sm" id="btn-modal-load-dispatch-recs">
+              <i data-lucide="sparkles"></i> AI Recommend Units
+            </button>
+          </div>
+
+          <div id="detail-modal-current-asset" style="font-size: 0.85rem; color: var(--text-main); margin-bottom: 8px;">
+            None currently assigned.
+          </div>
+
+          <div id="detail-modal-dispatch-recommendations" style="display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto;">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- Operational Notes & Timeline -->
+        <div style="border-top: 1px solid var(--border-color); padding-top: 14px;">
+          <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); margin-bottom: 8px;">Officer Log Notes</h4>
+          
+          <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+            <input type="text" id="new-note-text" class="form-control" placeholder="Add operational remark or update from scene...">
+            <button class="btn btn-secondary btn-sm" id="btn-add-note" style="white-space: nowrap;">
+              <i data-lucide="message-square"></i> Add Note
+            </button>
+          </div>
+
+          <div id="detail-modal-notes-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto;">
+            <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center;">No log notes yet.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer" style="justify-content: space-between;">
+        <button class="btn btn-danger btn-sm" id="btn-delete-incident">
+          <i data-lucide="trash-2"></i> Delete Incident
+        </button>
+        <button class="btn btn-secondary" id="detail-modal-close-btn">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Footer -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-col">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+          <div class="brand-icon" style="width: 34px; height: 34px;">
+            <i data-lucide="shield-alert" style="width: 18px; height: 18px;"></i>
+          </div>
+          <span style="font-size: 1.2rem; font-weight: 800; color: var(--text-main);">RESQ<span style="color: var(--primary);">AI</span></span>
+        </div>
+        <p>AI-Powered Emergency Management & Disaster Response Decision Support Platform.</p>
+        <p style="margin-top: 8px; font-weight: 600; color: var(--text-main);">International Grand Challenge 2026, Pune, India</p>
+      </div>
+
+      <div class="footer-col">
+        <h4>Navigation</h4>
+        <ul class="footer-links">
+          <li><a href="dashboard.html">Live Dashboard</a></li>
+          <li><a href="report.html">Report Incident</a></li>
+          <li><a href="map.html">Disaster Map</a></li>
+          <li><a href="resources.html">Resources</a></li>
+          <li><a href="shelters.html">Shelters</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>System & API</h4>
+        <ul class="footer-links">
+          <li><a href="http://127.0.0.1:8000/docs" target="_blank">FastAPI Swagger</a></li>
+          <li><a href="http://127.0.0.1:8000/api/health" target="_blank">Health Check API</a></li>
+          <li><a href="about.html">About Project</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Operational Audit</h4>
+        <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+          All status updates, asset assignments, and notes are committed to persistent database records with timestamps and officer attribution.
+        </p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div>&copy; 2026 RESQAI Team • Built for International Grand Challenge 2026</div>
+      <div class="footer-disclaimer">Changes made here update the central database in real time.</div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/incidents.js"></script>
+</body>
+</html>

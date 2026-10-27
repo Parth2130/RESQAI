@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rescue Resource Management | RESQAI</title>
+  
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/responsive.css">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <!-- Demo Notice Banner -->
+  <div class="demo-banner">
+    <div class="demo-banner-content">
+      <span class="badge-pill">Operational Assets</span>
+      <span>Frontline Asset Pool • Ambulances, NDRF Rescue Boats, Fire Squads & Specialized Vehicles</span>
+    </div>
+  </div>
+
+  <!-- Navigation Bar -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="index.html" class="nav-brand">
+        <div class="brand-icon">
+          <i data-lucide="shield-alert"></i>
+        </div>
+        <div class="brand-text">
+          <h1>RESQ<span>AI</span></h1>
+          <p>Disaster Response System</p>
+        </div>
+      </a>
+
+      <button class="mobile-toggle" id="mobile-menu-toggle" aria-label="Toggle navigation">
+        <i data-lucide="menu"></i>
+      </button>
+
+      <ul class="nav-menu" id="nav-menu">
+        <li><a href="index.html" class="nav-link"><i data-lucide="home"></i> Home</a></li>
+        <li><a href="dashboard.html" class="nav-link"><i data-lucide="layout-dashboard"></i> Live Dashboard</a></li>
+        <li><a href="incidents.html" class="nav-link"><i data-lucide="list"></i> Incidents</a></li>
+        <li><a href="report.html" class="nav-link"><i data-lucide="alert-octagon"></i> Report Incident</a></li>
+        <li><a href="map.html" class="nav-link"><i data-lucide="map"></i> Disaster Map</a></li>
+        <li><a href="resources.html" class="nav-link active"><i data-lucide="truck"></i> Resources</a></li>
+        <li><a href="shelters.html" class="nav-link"><i data-lucide="home"></i> Shelters</a></li>
+        <li><a href="analytics.html" class="nav-link"><i data-lucide="bar-chart-3"></i> Analytics</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <div id="system-health-pill" class="health-indicator health-online">
+          <span class="health-dot"></span>
+          <span>API Online</span>
+        </div>
+
+        <div class="alerts-wrapper">
+          <button class="btn-icon" id="alerts-toggle-btn" aria-label="Operational Notifications">
+            <i data-lucide="bell"></i>
+            <span class="badge-counter" id="alerts-badge" style="display: none;">0</span>
+          </button>
+          
+          <div class="alerts-dropdown" id="alerts-dropdown-menu">
+            <div class="alerts-header">
+              <h4>Operations Alerts</h4>
+              <button class="btn-text-link" id="mark-all-alerts-read">Mark all read</button>
+            </div>
+            <div class="alerts-list" id="alerts-list-container">
+              <div class="empty-alerts">Loading notifications...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    
+    <div class="page-header">
+      <div class="page-title-group">
+        <h2>Rescue Asset Pool & Readiness</h2>
+        <p>Manage emergency response teams, verify operational availability, and manage deployments.</p>
+      </div>
+
+      <div class="page-actions">
+        <button class="btn btn-primary btn-sm" id="btn-open-add-resource">
+          <i data-lucide="plus-circle"></i> Register New Asset
+        </button>
+      </div>
+    </div>
+
+    <!-- Metrics Strip -->
+    <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 22px;">
+      <div class="stat-card stat-purple">
+        <div class="stat-icon"><i data-lucide="truck"></i></div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-res-total">0</div>
+          <div class="stat-label">Total Assets</div>
+          <div class="stat-subtext">Registered in fleet</div>
+        </div>
+      </div>
+
+      <div class="stat-card stat-teal">
+        <div class="stat-icon"><i data-lucide="check-circle"></i></div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-res-available">0</div>
+          <div class="stat-label">Available for Dispatch</div>
+          <div class="stat-subtext">Immediate staging readiness</div>
+        </div>
+      </div>
+
+      <div class="stat-card stat-orange">
+        <div class="stat-icon"><i data-lucide="radio"></i></div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-res-assigned">0</div>
+          <div class="stat-label">Currently Deployed</div>
+          <div class="stat-subtext">Active on incidents</div>
+        </div>
+      </div>
+
+      <div class="stat-card stat-blue">
+        <div class="stat-icon"><i data-lucide="ambulance"></i></div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-res-ambulances">0</div>
+          <div class="stat-label">Medical Ambulances</div>
+          <div class="stat-subtext">Advanced Life Support</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter Control Bar -->
+    <div class="card" style="padding: 16px; margin-bottom: 22px;">
+      <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 200px;">
+          <select id="filter-resource-type" class="form-control">
+            <option value="All">All Resource Categories</option>
+            <option value="Ambulance">Ambulance (ALS / Medical)</option>
+            <option value="Boat">Flood Rescue Boat</option>
+            <option value="Search-and-rescue unit">Search-and-Rescue Unit (NDRF)</option>
+            <option value="Fire-response team">Fire-Response Team</option>
+            <option value="Rescue vehicle">Heavy Rescue Vehicle</option>
+            <option value="Relief supply vehicle">Relief Supply Convoy</option>
+            <option value="Medical team">Field Medical Team</option>
+          </select>
+        </div>
+
+        <div style="flex: 1; min-width: 180px;">
+          <select id="filter-resource-status" class="form-control">
+            <option value="All">All Availability Statuses</option>
+            <option value="Available">Available Only</option>
+            <option value="Assigned">Assigned Only</option>
+            <option value="En route">En Route</option>
+            <option value="Busy">Busy / Inactive</option>
+          </select>
+        </div>
+
+        <button class="btn btn-secondary btn-sm" id="btn-refresh-resources">
+          <i data-lucide="refresh-cw"></i> Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Resources Table -->
+    <div class="card">
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Asset Code</th>
+              <th>Unit Name</th>
+              <th>Type</th>
+              <th>Base Location</th>
+              <th>Capacity</th>
+              <th>Capabilities</th>
+              <th>Status</th>
+              <th>Contact / Dispatch</th>
+              <th style="text-align: right;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="resources-table-body">
+            <tr>
+              <td colspan="9" style="text-align: center; padding: 40px;">
+                <div class="spinner spinner-primary"></div>
+                <div style="margin-top: 10px; color: var(--text-secondary);">Loading registered rescue assets...</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Add New Resource Modal -->
+  <div class="modal-overlay" id="add-resource-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Register Emergency Rescue Asset</h3>
+        <button class="modal-close" id="modal-add-res-close">&times;</button>
+      </div>
+
+      <form id="add-resource-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="res-name">Asset Name <span class="required">*</span></label>
+            <input type="text" id="res-name" class="form-control" placeholder="e.g. Pune Quick-Response Boat Bravo" required minlength="3">
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+            <div class="form-group">
+              <label class="form-label" for="res-type">Resource Type <span class="required">*</span></label>
+              <select id="res-type" class="form-control" required>
+                <option value="Ambulance">Ambulance</option>
+                <option value="Boat">Flood Rescue Boat</option>
+                <option value="Search-and-rescue unit">Search-and-Rescue Unit</option>
+                <option value="Fire-response team">Fire-Response Team</option>
+                <option value="Rescue vehicle">Rescue Vehicle</option>
+                <option value="Relief supply vehicle">Relief Supply Vehicle</option>
+                <option value="Medical team">Medical Team</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="res-capacity">Crew / Victim Capacity <span class="required">*</span></label>
+              <input type="number" id="res-capacity" class="form-control" value="4" min="1" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="res-location">Base Station Location <span class="required">*</span></label>
+            <input type="text" id="res-location" class="form-control" placeholder="e.g. Swargate Fire Brigade Station, Pune" required>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+            <div class="form-group">
+              <label class="form-label" for="res-lat">Base Latitude</label>
+              <input type="number" id="res-lat" class="form-control" step="0.0001" placeholder="18.5018" value="18.5018">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="res-lng">Base Longitude</label>
+              <input type="number" id="res-lng" class="form-control" step="0.0001" placeholder="73.8586" value="73.8586">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="res-capabilities">Specialized Capabilities (Comma-separated)</label>
+            <input type="text" id="res-capabilities" class="form-control" placeholder="e.g. Inflatable, Sonar, Night Search, 8-Person Extraction">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="res-contact">Emergency Radio / Phone Contact</label>
+            <input type="text" id="res-contact" class="form-control" placeholder="e.g. +91 98220 99881">
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-add-res">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-add-res">Register Asset</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Global Footer -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-col">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+          <div class="brand-icon" style="width: 34px; height: 34px;">
+            <i data-lucide="shield-alert" style="width: 18px; height: 18px;"></i>
+          </div>
+          <span style="font-size: 1.2rem; font-weight: 800; color: var(--text-main);">RESQ<span style="color: var(--primary);">AI</span></span>
+        </div>
+        <p>AI-Powered Emergency Management & Disaster Response Decision Support Platform.</p>
+        <p style="margin-top: 8px; font-weight: 600; color: var(--text-main);">International Grand Challenge 2026, Pune, India</p>
+      </div>
+
+      <div class="footer-col">
+        <h4>Navigation</h4>
+        <ul class="footer-links">
+          <li><a href="dashboard.html">Live Dashboard</a></li>
+          <li><a href="incidents.html">Incident Queue</a></li>
+          <li><a href="map.html">Disaster Map</a></li>
+          <li><a href="shelters.html">Shelters</a></li>
+          <li><a href="analytics.html">Analytics</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>System & API</h4>
+        <ul class="footer-links">
+          <li><a href="http://127.0.0.1:8000/docs" target="_blank">FastAPI Swagger</a></li>
+          <li><a href="http://127.0.0.1:8000/api/health" target="_blank">Health Check API</a></li>
+          <li><a href="about.html">About Project</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Fleet Protocol</h4>
+        <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+          All unit dispatches and release transactions update the operational status in SQLite, ensuring units are never double-booked across concurrent emergency scenes.
+        </p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div>&copy; 2026 RESQAI Team • Built for International Grand Challenge 2026</div>
+      <div class="footer-disclaimer">Changes persist in local SQLite backend database.</div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/resources.js"></script>
+</body>
+</html>
