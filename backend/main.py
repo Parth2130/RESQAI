@@ -10,6 +10,8 @@ from typing import List, Optional, Dict, Any
 
 from fastapi import FastAPI, Depends, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 
@@ -941,3 +943,32 @@ def get_analytics_summary(db: Session = Depends(get_db)):
         "generated_at": datetime.utcnow().isoformat(),
         "is_demo_data": True
     }
+
+
+# ============================================================================
+# PRODUCTION STATIC FRONTEND SERVING (SINGLE-URL DEPLOYMENTS)
+# ============================================================================
+FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
+if os.path.exists(FRONTEND_DIR):
+    css_dir = os.path.join(FRONTEND_DIR, "css")
+    js_dir = os.path.join(FRONTEND_DIR, "js")
+    assets_dir = os.path.join(FRONTEND_DIR, "assets")
+
+    if os.path.exists(css_dir):
+        app.mount("/css", StaticFiles(directory=css_dir), name="css")
+    if os.path.exists(js_dir):
+        app.mount("/js", StaticFiles(directory=js_dir), name="js")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/", tags=["Frontend"])
+    def serve_homepage():
+        return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+    @app.get("/{page_name}.html", tags=["Frontend"])
+    def serve_frontend_page(page_name: str):
+        page_path = os.path.join(FRONTEND_DIR, f"{page_name}.html")
+        if os.path.exists(page_path):
+            return FileResponse(page_path)
+        raise HTTPException(status_code=404, detail="Page not found.")
+
