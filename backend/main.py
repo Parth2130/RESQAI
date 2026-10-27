@@ -3,7 +3,13 @@ RESQAI FastAPI Application
 AI-Powered Emergency Management & Response System API
 Competition: International Grand Challenge 2026, Pune, India
 """
+import sys
 import os
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+if CURRENT_DIR not in sys.path:
+    sys.path.insert(0, CURRENT_DIR)
+
 import json
 from datetime import datetime
 from typing import List, Optional, Dict, Any
