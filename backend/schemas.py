@@ -1,165 +1,197 @@
-"""
-RESQAI Pydantic Schemas for Request & Response Validation
-"""
-from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List, Any
+from datetime import datetime
+from pydantic import BaseModel, Field
 
+# ----------------- CITIZEN EMERGENCY REPORT SCHEMAS -----------------
 
-# --- INCIDENT SCHEMAS ---
-class IncidentCreate(BaseModel):
-    title: str = Field(..., min_length=3, max_length=200)
-    incident_type: str = Field(..., min_length=2, max_length=100)
-    description: str = Field(..., min_length=5)
-    severity: str = Field(default="Medium")
-    people_affected: int = Field(default=0, ge=0)
-    people_needing_assistance: int = Field(default=0, ge=0)
-    latitude: Optional[float] = Field(default=None)
-    longitude: Optional[float] = Field(default=None)
-    location_name: str = Field(..., min_length=2, max_length=255)
-    reporter_name: Optional[str] = Field(default=None, max_length=150)
-    reporter_contact: Optional[str] = Field(default=None, max_length=100)
-    is_demo: Optional[bool] = Field(default=False)
+class ReportCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=120, description="Full name of reporting citizen")
+    contact: str = Field(..., min_length=7, max_length=50, description="Phone number or contact info")
+    emergency_type: str = Field(..., description="Flood, Earthquake, Cyclone, Fire, Landslide, Medical, Other")
+    description: str = Field(..., min_length=5, description="Details of emergency and required assistance")
+    location: str = Field(..., min_length=2, max_length=255, description="Location name, landmark or city")
+    latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    severity: str = Field("High", description="Critical, High, Medium, Low")
+    affected_count: int = Field(1, ge=1, description="Number of people affected or stranded")
+    image_url: Optional[str] = Field(None, description="Optional photo URL or base64")
 
-    @field_validator("latitude")
-    @classmethod
-    def validate_latitude(cls, v):
-        if v is not None and (v < -90 or v > 90):
-            raise ValueError("Latitude must be between -90 and 90 degrees.")
-        return v
+class ReportHistoryItem(BaseModel):
+    id: int
+    previous_status: Optional[str]
+    new_status: str
+    notes: Optional[str]
+    updated_by: Optional[str]
+    updated_at: datetime
 
-    @field_validator("longitude")
-    @classmethod
-    def validate_longitude(cls, v):
-        if v is not None and (v < -180 or v > 180):
-            raise ValueError("Longitude must be between -180 and 180 degrees.")
-        return v
+    class Config:
+        from_attributes = True
 
-
-class IncidentUpdate(BaseModel):
-    title: Optional[str] = None
-    incident_type: Optional[str] = None
-    description: Optional[str] = None
-    severity: Optional[str] = None
-    people_affected: Optional[int] = Field(default=None, ge=0)
-    people_needing_assistance: Optional[int] = Field(default=None, ge=0)
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    location_name: Optional[str] = None
-    status: Optional[str] = None
-
-
-class IncidentStatusUpdate(BaseModel):
-    status: str = Field(..., min_length=3)
-    note: Optional[str] = None
-
-
-class IncidentNoteCreate(BaseModel):
-    note: str = Field(..., min_length=2)
-    author: Optional[str] = Field(default="Operations Officer")
-
-
-# --- RISK SCHEMAS ---
-class RiskAssessRequest(BaseModel):
-    incident_type: str
+# Public schema (NEVER exposes name or contact to public endpoints)
+class ReportPublic(BaseModel):
+    id: int
+    tracking_id: str
+    emergency_type: str
+    description: str
+    location: str
+    latitude: Optional[float]
+    longitude: Optional[float]
     severity: str
-    people_affected: int = 0
-    people_needing_assistance: int = 0
-    has_coordinates: bool = True
-    vulnerable_present: bool = False
-    environmental_hazard_alert: bool = False
+    status: str
+    affected_count: int
+    image_url: Optional[str]
+    created_at: datetime
+    updated_at: datetime
 
+    class Config:
+        from_attributes = True
 
-class RiskAssessResponse(BaseModel):
-    risk_score: int
-    risk_level: str
-    priority: str
-    factors: List[str]
-    limitations: List[str]
-    weights_breakdown: Dict[str, Any]
+# Tracking schema for citizen looking up their own report by tracking_id
+class ReportTrackingResponse(BaseModel):
+    tracking_id: str
+    emergency_type: str
+    description: str
+    location: str
+    latitude: Optional[float]
+    longitude: Optional[float]
+    severity: str
+    status: str
+    affected_count: int
+    created_at: datetime
+    updated_at: datetime
+    history: List[ReportHistoryItem] = []
+    disclaimer: str = "RESQAI is an informational and reporting platform. It is not an official emergency dispatch service. In immediate danger, call India's emergency number 112 directly."
 
+    class Config:
+        from_attributes = True
 
-# --- RESOURCE SCHEMAS ---
-class ResourceCreate(BaseModel):
-    name: str = Field(..., min_length=3, max_length=150)
-    resource_type: str = Field(..., min_length=2, max_length=100)
-    capabilities: Optional[List[str]] = Field(default_factory=list)
-    location_name: str = Field(..., min_length=2, max_length=255)
+# Admin schema (includes contact details for rescue verification)
+class ReportAdmin(BaseModel):
+    id: int
+    tracking_id: str
+    name: str
+    contact: str
+    emergency_type: str
+    description: str
+    location: str
+    latitude: Optional[float]
+    longitude: Optional[float]
+    severity: str
+    status: str
+    affected_count: int
+    image_url: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    history: List[ReportHistoryItem] = []
+
+    class Config:
+        from_attributes = True
+
+class ReportStatusUpdate(BaseModel):
+    status: str = Field(..., description="Submitted, Under Review, Acknowledged, Resolved, Closed")
+    notes: Optional[str] = Field(None, description="Internal responder notes or public status update")
+
+# ----------------- ADMIN AUTH SCHEMAS -----------------
+
+class AdminLoginRequest(BaseModel):
+    email: str
+    password: str
+
+class AdminUserResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    role: str
+
+    class Config:
+        from_attributes = True
+
+class AdminTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: AdminUserResponse
+
+class AdminSetupRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+# ----------------- AI ASSISTANT SCHEMAS -----------------
+
+class ChatMessage(BaseModel):
+    role: str # "user" or "assistant"
+    content: str
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=1500)
+    language: str = Field("en", description="en (English), hi (Hindi), mr (Marathi)")
+    location: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    capacity: int = Field(default=1, ge=1)
-    status: Optional[str] = Field(default="Available")
-    contact_info: Optional[str] = None
-    is_demo: Optional[bool] = Field(default=False)
+    conversation_history: Optional[List[ChatMessage]] = []
 
+class ChatResponse(BaseModel):
+    response: str
+    language: str
+    grounding: Optional[dict] = None
+    provider: str
+    disclaimer: str = "RESQAI is an informational safety platform. Never substitute AI guidance for official government emergency orders. In immediate danger, call 112."
+    timestamp: str
 
-class ResourceUpdate(BaseModel):
-    name: Optional[str] = None
-    resource_type: Optional[str] = None
-    capabilities: Optional[List[str]] = None
-    location_name: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    capacity: Optional[int] = Field(default=None, ge=1)
-    status: Optional[str] = None
-    contact_info: Optional[str] = None
+# ----------------- LIVE DATA SCHEMAS -----------------
 
+class WeatherResponse(BaseModel):
+    source: str = "Open-Meteo"
+    location: str
+    latitude: float
+    longitude: float
+    temperature: float
+    apparent_temperature: Optional[float] = None
+    relative_humidity: Optional[int] = None
+    wind_speed: float
+    wind_direction: Optional[float] = None
+    precipitation: float
+    weather_condition: str
+    is_day: Optional[int] = 1
+    forecast_daily: List[dict] = []
+    timestamp: str
+    attribution: str = "Weather data provided by Open-Meteo under CC BY 4.0"
 
-class ResourceAssignRequest(BaseModel):
-    resource_id: int
-    notes: Optional[str] = None
+class EarthquakeItem(BaseModel):
+    id: str
+    magnitude: float
+    place: str
+    time: int
+    time_iso: str
+    latitude: float
+    longitude: float
+    depth_km: float
+    severity: str
+    status: Optional[str] = "reviewed"
+    tsunami_flag: int
+    url: str
+    in_south_asia: bool = False
 
+class EarthquakesResponse(BaseModel):
+    source: str = "USGS Earthquake Hazards Program"
+    count: int
+    earthquakes: List[EarthquakeItem]
+    timestamp: str
+    attribution: str = "Data courtesy of the U.S. Geological Survey (USGS)"
 
-# --- SHELTER SCHEMAS ---
-class ShelterCreate(BaseModel):
-    name: str = Field(..., min_length=3, max_length=200)
-    location_name: str = Field(..., min_length=2, max_length=255)
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    total_capacity: int = Field(..., ge=1)
-    current_occupancy: int = Field(default=0, ge=0)
-    facilities: Optional[List[str]] = Field(default_factory=list)
-    accessibility_support: bool = Field(default=True)
-    medical_support: bool = Field(default=False)
-    contact_details: Optional[str] = None
-    status: Optional[str] = Field(default="Operational")
-    vulnerable_elderly: Optional[int] = Field(default=0, ge=0)
-    vulnerable_mobility: Optional[int] = Field(default=0, ge=0)
-    vulnerable_children: Optional[int] = Field(default=0, ge=0)
-    vulnerable_medical: Optional[int] = Field(default=0, ge=0)
-    is_demo: Optional[bool] = Field(default=False)
-
-
-class ShelterUpdate(BaseModel):
-    name: Optional[str] = None
-    location_name: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    total_capacity: Optional[int] = Field(default=None, ge=1)
-    current_occupancy: Optional[int] = Field(default=None, ge=0)
-    facilities: Optional[List[str]] = None
-    accessibility_support: Optional[bool] = None
-    medical_support: Optional[bool] = None
-    contact_details: Optional[str] = None
-    status: Optional[str] = None
-    vulnerable_elderly: Optional[int] = None
-    vulnerable_mobility: Optional[int] = None
-    vulnerable_children: Optional[int] = None
-    vulnerable_medical: Optional[int] = None
-
-
-# --- ROUTE RECOMMENDATION SCHEMAS ---
-class RouteRequest(BaseModel):
-    origin_lat: float
-    origin_lng: float
-    dest_lat: float
-    dest_lng: float
-    resource_type: Optional[str] = "Standard Rescue"
-    avoid_critical_hazards: Optional[bool] = True
-
-
-# --- ALERT SCHEMAS ---
-class AlertCreate(BaseModel):
-    alert_type: str = "Incident"
+class AlertsResponse(BaseModel):
+    source: str = "NDMA SACHET / Disaster Warning Division"
+    status: str # "active", "unavailable", "simulated"
     message: str
-    severity: str = "Medium"
-    related_incident_id: Optional[int] = None
+    portal_url: str = "https://sachet.ndma.gov.in/"
+    alerts: List[dict] = []
+    timestamp: str
+
+class FiresResponse(BaseModel):
+    source: str = "NASA FIRMS (Fire Information for Resource Management System)"
+    status: str
+    message: str
+    hotspots: List[dict] = []
+    key_configured: bool
+    notice: str = "Satellite thermal detections represent potential hotspots and thermal anomalies, not independently verified ground structural fires."
+    timestamp: str
