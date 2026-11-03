@@ -88,11 +88,20 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
     }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        let addr = "";
+        try {
+          const res = await api.reverseGeocode(lat, lng);
+          if (res && res.address) addr = res.address;
+        } catch {}
+
         setFormData(prev => ({
           ...prev,
-          latitude: pos.coords.latitude.toFixed(6),
-          longitude: pos.coords.longitude.toFixed(6)
+          latitude: lat.toFixed(6),
+          longitude: lng.toFixed(6),
+          location: prev.location || addr || `Sector (${lat.toFixed(4)}, ${lng.toFixed(4)})`
         }));
         setLocating(false);
       },

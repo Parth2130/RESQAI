@@ -33,10 +33,19 @@ export default function SOSPage({ setActivePage }) {
     }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        let addr = "";
+        try {
+          const res = await api.reverseGeocode(lat, lng);
+          if (res && res.address) addr = res.address;
+        } catch {}
+
         setCoords({
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude
+          latitude: lat,
+          longitude: lng,
+          locationText: addr || `GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`
         });
         setLocating(false);
         setStep(2);

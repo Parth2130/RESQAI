@@ -29,6 +29,7 @@ from services.weather import fetch_weather_data
 from services.earthquakes import fetch_earthquakes_data
 from services.alerts import fetch_ndma_alerts
 from services.fires import fetch_nasa_fires
+from services.location_service import reverse_geocode, forward_geocode, get_location_api_key
 from services.nugen_ai import (
     classify_emergency_report, assess_incident_risk,
     generate_chat_response, generate_response_recommendations,
@@ -635,6 +636,29 @@ def api_ai_recommend_response(
         "affected_count": incident.affected_count
     }
     return generate_response_recommendations(incident_dict)
+
+# ============================================================================
+# LOCATION & GEOCODING APIS
+# ============================================================================
+
+@app.get("/api/location/reverse", tags=["Location"])
+def get_reverse_geocode(lat: float = Query(...), lng: float = Query(...)):
+    """Reverse geocodes GPS coordinates to human-readable address with API key support."""
+    address = reverse_geocode(lat, lng)
+    return {
+        "latitude": lat,
+        "longitude": lng,
+        "address": address,
+        "key_active": bool(get_location_api_key())
+    }
+
+@app.get("/api/location/search", tags=["Location"])
+def search_location_endpoint(query: str = Query(...)):
+    """Forward geocodes search query to coordinates."""
+    result = forward_geocode(query)
+    if not result:
+        return {"found": False, "query": query, "message": "Location not found in sector"}
+    return {"found": True, **result}
 
 # ============================================================================
 # LIVE TELEMETRY APIS (Open-Meteo, USGS, NASA FIRMS, NDMA SACHET)
