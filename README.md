@@ -1,257 +1,247 @@
-# RESQAI — AI-Powered Emergency Management & Disaster Response Platform
+# RESQAI — AI-Powered Emergency Management & Response System
 
 > **Tagline:** Detect Faster. Respond Smarter. Save Lives.  
-> **Region:** India (Unified 112 Protocol & Subcontinent Telemetry)
+> **Official Design System:** Design C — Premium Pastel & Gradient SaaS Interface  
+> **Target Region:** Subcontinent Telemetry & India National Emergency 112 Protocol  
 
 ---
 
-## 📌 Overview
+## 📌 Executive Overview
 
-**RESQAI** is a full-stack, real-time emergency management and disaster response web platform built from scratch. It bridges satellite, seismic, and meteorological telemetry with community crowd-reporting and AI-driven preparedness.
+**RESQAI** is a real-world disaster management and emergency response system. It unifies satellite thermal feeds, live USGS seismic telemetry, and Open-Meteo meteorological models with community crowd-reporting, transparent AI triage (Nugen AI), hazard-aware rescue transit routing, and coordinated responder dispatch.
 
-Built specifically for the Indian geographical context, RESQAI connects live data feeds with citizen safety guidance and incident triage.
-
----
-
-## 🚀 Key Capabilities & Modules
-
-1. **Home / Landing Portal:**
-   - Real-time telemetry ticker (Open-Meteo & USGS feeds).
-   - "How RESQAI Works" 4-step lifecycle (Detect $\rightarrow$ Analyze $\rightarrow$ Coordinate $\rightarrow$ Guide).
-   - Instant access to Emergency SOS reporting, live dashboard, and AI assistant.
-   - Prominent 112 national emergency disclaimer.
-
-2. **Live Disaster Operations Dashboard:**
-   - Real-time weather and 5-day precipitation forecasts via **Open-Meteo API** (New Delhi, Mumbai, Pune, Kolkata, Bengaluru, Chennai, Kochi, etc.).
-   - Live seismic monitor via **USGS Earthquake GeoJSON API** with magnitude filters (M2.5+, M4.5+, M6.0+) and South Asia tectonic plate highlighting.
-   - Official national disaster alerts status via **NDMA SACHET**.
-   - Satellite thermal anomaly monitoring via **NASA FIRMS**.
-   - Verified community citizen reports with status tracking and severity tags.
-
-3. **Real-Time Geospatial Disaster Map:**
-   - Interactive **Leaflet.js** map with dark CartoDB tiles.
-   - Color-coded severity pins (Red: Critical / M6.0+, Amber: High / M4.5+, Yellow: Medium / Light).
-   - Detailed incident popups with coordinates, depth, and safety instructions.
-   - Layer toggles (Earthquakes vs Citizen Reports) and Indian regional jump presets.
-   - "My Current Location" button using browser geolocation.
-
-4. **Citizen Emergency SOS Reporting & Tracking:**
-   - Form for reporting emergencies (Floods, Earthquakes, Cyclones, Landslides, Fires, Waterlogging, Medical).
-   - GPS auto-detection button or manual landmark input.
-   - Severity selection, number of affected people, and description.
-   - Generates unique alphanumeric tracking IDs (e.g. `RESQ-9824X`).
-   - Incident Tracking tab with a 5-step visual pipeline: `Submitted` $\rightarrow$ `Under Review` $\rightarrow$ `Acknowledged` $\rightarrow$ `Resolved` $\rightarrow$ `Closed`.
-   - **Confidentiality:** Citizen names and contact numbers are strictly protected and never displayed in public endpoints.
-
-5. **AI Emergency Assistant (Nugen AI):**
-   - Multilingual support: **English**, **हिंदी (Hindi)**, and **मराठी (Marathi)**.
-   - Grounded with live backend telemetry (current weather, recent earthquakes, and NDMA advisory).
-   - Enforces strict safety rules: advises dialing 112, avoids claiming rescue dispatches, provides NDMA-aligned first aid and preparedness steps.
-   - Graceful standby handling when API keys are not yet configured.
-
-6. **Educational Preparedness Manual (8 Categories):**
-   - Earthquakes, Floods, Cyclones, Structural & Wildfires, Heatwaves, Landslides, Lightning, and the 72-Hour Emergency Go-Bag Kit checklist.
-   - Structured into **Before**, **During**, and **After** action items.
-
-7. **Verified Emergency Directory:**
-   - Direct dialer for India's unified emergency number **112**.
-   - National helplines: NDMA (1070), SDRF (1077), Ambulance (108), Fire (101), Police (100).
-   - Verified official portals (NDMA SACHET, IMD Mausam, CWC Flood Forecasting, GSI Landslides).
-   - Guidance on locating verified hospitals via the Ayushman Bharat Health Facility Registry.
-
-8. **Admin / Control Room Portal:**
-   - Protected with JWT token authentication and bcrypt password hashing.
-   - Complete incident triage queue with confidential citizen phone numbers and names.
-   - Status update modal with audit history logging and internal notes.
-   - Search by tracking ID, citizen name, or location.
+Built to address the critical friction points of natural disasters (floods, earthquakes, cyclones, structural blazes, landslides), RESQAI ensures:
+- **Instant Citizen SOS & Reporting** with unique, human-readable Tracking IDs (e.g., `RQ-2026-0001`).
+- **4 Autonomous Nugen AI Modules** for emergency classification, explainable multi-factor risk scoring (0–100), conversational safety guidance, and tactical responder dispatch recommendations.
+- **Strict PII Protection** ensuring citizen phone numbers and names are never leaked on public maps or feeds, while securely accessible to verified rescue commanders.
+- **Interactive Geospatial Disaster Map** with light pastel Positron/OSM tiles and color-coded hazard indicators.
+- **Hazard-Aware Route Planning** alerting rescue units if transit corridors cross active flash floods or rockfalls.
 
 ---
 
-## 🛠️ Technology Stack
+## 🎨 Official Design System (Design C: Premium Pastel & Gradient)
 
-- **Frontend:** React 18, Vite, Tailwind CSS, Lucide React icons, Leaflet.js (OpenStreetMap)
-- **Backend:** Python FastAPI, SQLAlchemy ORM, SQLite (`resqai.db` — ready for PostgreSQL), Uvicorn
-- **HTTP / APIs:** HTTPX, Requests, Open-Meteo API, USGS Earthquake Hazards GeoJSON API, NDMA SACHET, NASA FIRMS, Nugen AI Inference API
-- **Security:** PyJWT, Bcrypt, CORS middleware, PII sanitization on public endpoints
+RESQAI features a light, modern SaaS aesthetic avoiding dark dashboards:
 
----
-
-## 📂 Project Structure
-
-```
-RESQAI/
-├── backend/
-│   ├── main.py                  # FastAPI application entrypoint & API routes
-│   ├── database.py              # SQLAlchemy engine & session dependency
-│   ├── models.py                # Database models (User, EmergencyReport, ReportHistory)
-│   ├── schemas.py               # Pydantic schemas for validation & responses
-│   ├── auth.py                  # Password hashing & JWT bearer authentication
-│   ├── config.py                # Environment configuration loader
-│   ├── test_api.py              # Automated unit and integration test suite
-│   ├── services/
-│   │   ├── weather.py           # Open-Meteo real-time weather & forecast
-│   │   ├── earthquakes.py       # USGS seismic GeoJSON parser & South Asia filter
-│   │   ├── alerts.py            # NDMA SACHET disaster warning portal check
-│   │   ├── fires.py             # NASA FIRMS thermal anomalies parser
-│   │   └── nugen_ai.py          # Nugen AI multilingual assistant integration
-│   ├── requirements.txt         # Python dependencies
-│   └── .env                     # Local backend environment variables
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Navbar.jsx       # Brand logo, nav links, and AI trigger
-│   │   │   ├── Footer.jsx       # Emergency disclaimers, helplines & source credits
-│   │   │   ├── EmergencyBanner.jsx # Sticky 112 national alert notification
-│   │   │   └── AIAssistantDrawer.jsx # Multilingual Nugen AI chatbot drawer
-│   │   ├── pages/
-│   │   │   ├── HomePage.jsx     # Landing page with hero & live telemetry cards
-│   │   │   ├── DashboardPage.jsx# Live disaster dashboard with city & quake filters
-│   │   │   ├── MapPage.jsx      # Leaflet geospatial map with severity markers
-│   │   │   ├── ReportPage.jsx   # Citizen SOS submission & report tracking
-│   │   │   ├── PreparednessPage.jsx # 8-category disaster survival manual
-│   │   │   ├── ResourcesPage.jsx# 112 hotline & official government portals
-│   │   │   └── AdminPage.jsx    # Secure control room & triage dashboard
-│   │   ├── services/
-│   │   │   └── api.js           # Centralized API client
-│   │   ├── App.jsx              # Main React application layout
-│   │   ├── main.jsx             # React entrypoint
-│   │   └── index.css            # Tailwind directives & dark theme styling
-│   ├── package.json             # Frontend dependencies
-│   ├── vite.config.js           # Vite configuration with /api backend proxy
-│   └── tailwind.config.js       # Emergency palette (navy, blue, red, amber, green)
-│
-├── .env.example                 # Example environment variables template
-├── .gitignore                   # Git ignore rules
-└── README.md                    # Project documentation & run guide
-```
+| Token | Hex Code | Purpose |
+| :--- | :--- | :--- |
+| **Main Background** | `#F8FAFF` | Soft, ambient canvas |
+| **Primary Blue** | `#5278E8` | Primary brand accent & active states |
+| **Secondary Lavender** | `#A5B4FC` | Soft gradient bridges & highlights |
+| **Accent Sky Blue** | `#38BDF8` | Telemetry & geolocation markers |
+| **Success Green** | `#22C55E` | Verified resources & resolved cases |
+| **Warning Orange** | `#F59E0B` | High severity & advisory alerts |
+| **Critical Red** | `#EF4444` | Critical life peril & SOS beacons |
+| **Card Background** | `#FFFFFF` | Crisp rounded cards with subtle drop shadows |
+| **Primary Text** | `#1E293B` | High-contrast readable typography |
+| **Secondary Text** | `#64748B` | Subtitles, timestamps, and metadata |
+| **Border Color** | `#E8ECF5` | Delicate, unobtrusive card dividing lines |
 
 ---
 
-## ⚡ Setup & Execution Guide (VS Code)
+## 🏗️ 15 Connected Platform Pages
+
+Every page in RESQAI is connected through functional navigation:
+
+1. **Landing Portal (`/home`):** Hero section with the official mission heading, two primary CTAs (*Explore Live Dashboard* & *Report Emergency*), 4-step lifecycle (*Detect $\rightarrow$ Analyze $\rightarrow$ Coordinate $\rightarrow$ Guide*), challenge breakdowns, telemetry statistics, and verified helpline links.
+2. **Citizen Operations Hub (`/dashboard`):** 4 real-time metric cards (Active Emergencies, Critical Alerts, Nearby Hazards, SOS Requests), Open-Meteo weather card with 5-day precipitation forecasts, USGS seismic feed, ground reports, and resource directory.
+3. **Live Geospatial Disaster Map (`/map`):** Interactive Leaflet map with CartoDB Voyager tiles, user GPS geolocation, layer toggles (Incidents, Earthquakes, Facilities), color-coded pins, clickable detail panels, and interactive hazard-aware route generator.
+4. **Emergency Incident Reporting (`/report`):** 8 disaster hazard categories, description, auto-detect GPS coordinates, affected and injured counts, vulnerable demographic toggle (infants/elderly), optional image upload, and immediate AI triage result.
+5. **SOS Emergency Beacon (`/sos`):** Prominent one-tap distress beacon with confirmation dialog to prevent accidental triggers, automated GPS coordinate transmission, and clear 112 national emergency guidance.
+6. **AI Safety Assistant (`/ai-assistant`):** Dedicated conversational assistant powered by Nugen AI, live-grounded with Open-Meteo and USGS feeds, supporting **English**, **हिंदी (Hindi)**, and **मराठी (Marathi)**.
+7. **Safety Center & Preparedness (`/safety`):** 8 comprehensive disaster manuals (Earthquakes, Floods, Cyclones, Fires, Heatwaves, Landslides, Lightning, and the 72-Hour Go-Bag Kit) organized into **Before**, **During**, and **After** action items.
+8. **Emergency Resource Center (`/resources`):** Searchable, filterable directory of verified facilities (Hospitals, Ambulances, Fire Stations, Shelters, Rescue Teams, Relief Centers) with live occupancy ratios, direct dialers, and admin creation modal.
+9. **Incident Tracking Pipeline (`/track`):** Search by Incident ID (e.g. `RQ-2026-0001`) with a 5-stage visual response pipeline: `New` $\rightarrow$ `Under Verification` $\rightarrow$ `Verified` $\rightarrow$ `Assigned` $\rightarrow$ `Resolved`.
+10. **Responder Tactical Command (`/responder`):** Role-protected operational interface displaying incoming triage queues, confidential citizen phone numbers, Nugen AI Module 4 recommendations, and status progression controls.
+11. **Administrative Control Center (`/admin`):** High-command dashboard with 6 KPIs, user directory with one-click verification for newly registered responders, and immutable chronological audit log trails.
+12. **Operations Analytics (`/analytics`):** Real-time Recharts visualizations showing Category Distributions (Bar Chart), Severity Breakdown (Donut Chart), and 7-Day Timeline Trends (Area Chart) directly aggregated from live database records.
+13. **User Profile & Settings (`/profile`):** Role badges, user metadata, family emergency contact manager, and telemetry notification preferences.
+14. **Authentication Portal — Sign In (`/login`):** JWT token authentication with 1-click hackathon demo presets for Citizen, Responder, and Administrator roles.
+15. **User Registration (`/register`):** Account registration with role selection and an explicit notice that responder and admin privileges require official verification.
+
+---
+
+## 🤖 Nugen AI Integration Architecture
+
+RESQAI integrates Nugen AI across 4 modular layers via backend proxies, ensuring API keys are never exposed to the client:
+
+- **Module 1: Emergency Classification & Triage (`POST /api/ai/classify`)**  
+  Accepts citizen descriptions and outputs structured JSON containing disaster type, extracted severity, affected count, vulnerable population presence, and confidence score.
+- **Module 2: Multi-Factor Risk Assessment Engine (`POST /api/ai/assess-risk`)**  
+  Computes an explainable 0–100 risk score and categorical grade (`Critical`, `High`, `Medium`, `Low`) based on base hazard weights, reported severity, rescue needs, vulnerable demographics, and compounding weather alerts.
+- **Module 3: Grounded Conversational Assistant (`POST /api/ai/chat`)**  
+  Chatbot grounded with real-time Open-Meteo weather telemetry, USGS tremors, and NDMA advisory feeds. Strictly enforces safety rules (always advising 112 in immediate danger and never fabricating dispatch claims).
+- **Module 4: Tactical Response Recommendations (`POST /api/ai/recommend-response`)**  
+  Generates tactical briefings for incident commanders, recommending appropriate resource categories (boats, cardiac units, heavy tenders), perimeter safety precautions, and evacuation zones.
+
+*Fallback Strategy:* If Nugen credentials are not yet supplied, RESQAI gracefully switches to an intelligent internal rule-based decision matrix labeled as **"AI Standby Mode"** without failing or pretending that unverified AI predictions were made.
+
+---
+
+## 📡 Real-World External APIs
+
+1. **Open-Meteo Weather API:** Real-time temperature, wind velocity, precipitation, and 5-day forecasts by geographical coordinates.
+2. **USGS Earthquake GeoJSON API:** Real-time seismic tremor telemetry with South Asia tectonic plate highlighting and magnitude filtering.
+3. **NASA FIRMS (Fire Information for Resource Management System):** Satellite thermal anomaly and hotspot monitoring.
+4. **NDMA SACHET Portal:** India's disaster alert portal status and guidelines.
+5. **OpenStreetMap & CartoDB Positron:** Fast, accessible map rendering and waypoint route geometry.
+
+---
+
+## 🗄️ Database Architecture (PostgreSQL & SQLite)
+
+The platform supports both local SQLite (`resqai.db`) and cloud-hosted Supabase PostgreSQL via SQLAlchemy ORM.
+
+### Tables & Schema
+1. `users` (`profiles`): Authentication, encrypted password hashes, roles (`citizen`, `responder`, `admin`), phone, agency, and verification flags.
+2. `incidents` (`emergency_reports`): Unique Tracking IDs (`RQ-2026-XXXX`), coordinates, severity, impact counts, vulnerable flags, status pipeline, and AI triage summaries.
+3. `incident_updates` (`report_history`): Audit history tracking status changes, timestamps, notes, and responder names.
+4. `sos_requests`: Distress beacon logs with live GPS coordinates and contact phone numbers.
+5. `disaster_events`: Live external seismic, thermal, and meteorological event cache.
+6. `resources`: Capacity, current occupancy, operational availability, GPS coordinates, and contact details for hospitals, shelters, fire stations, ambulances, and rescue teams.
+7. `responders`: Badge IDs, specialized training, duty status (`Available`, `On Mission`, `Off Duty`), agency affiliation, and live coordinates.
+8. `assignments`: Tactical deployment links connecting incidents to specific responder units and equipment.
+9. `notifications`: Real-time emergency broadcasts and status alert records.
+10. `risk_assessments`: Mathematical weight breakdowns, contributing factors, recommendations, and explainability limitations.
+11. `audit_logs`: Immutable chronological log of administrative and command-level actions.
+
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
+- Python 3.10+ (tested on Python 3.13)
+- Node.js 18+ and npm
+- (Optional) Nugen API Key & Model ID
 
-- **Python 3.10+** (Python 3.13 tested and verified)
-- **Node.js 18+** and **npm**
+### 1. Environment Setup
 
----
+Create a `.env` file in the project root or inside `backend/`:
 
-### Step 1: Open the Project in VS Code
-
-```powershell
-cd C:\Users\parth\.gemini\antigravity\scratch\RESQAI
-code .
-```
-
----
-
-### Step 2: Configure Environment Variables
-
-Create or inspect `backend/.env` (a template is provided in `.env.example`):
-
-```ini
+```env
+# Database (SQLite default; replace with Supabase PostgreSQL connection string for production)
 DATABASE_URL=sqlite:///./resqai.db
-JWT_SECRET_KEY=resqai-super-secret-key-2026-disaster-response
+
+# JWT Secret Key
+JWT_SECRET_KEY=resqai-super-secure-production-key-2026-disaster-response
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 
+# Initial Admin Seed Credentials
 INITIAL_ADMIN_EMAIL=admin@resqai.in
 INITIAL_ADMIN_PASSWORD=ResqAdmin@2026
 INITIAL_ADMIN_NAME=Emergency Control Officer
 
-# Nugen AI Inference Credentials (Optional for live assistant)
-NUGEN_API_KEY=
-NUGEN_MODEL_ID=
-NUGEN_API_URL=https://api.nugen.in/api/v3/inference/chat/completions
+# Nugen AI Credentials (docs.nugen.in)
+NUGEN_API_KEY=your_nugen_api_key_here
+NUGEN_MODEL=your_nugen_model_id_here
+NUGEN_BASE_URL=https://api.nugen.in/api/v3/inference/chat/completions
 
-# NASA FIRMS API Key (Optional for satellite thermal anomaly feed)
+# NASA FIRMS (Optional)
 NASA_FIRMS_MAP_KEY=
 ```
 
----
+### 2. Backend Installation & Startup
 
-### Step 3: Run the FastAPI Backend
-
-Open a terminal in VS Code:
-
-```powershell
+```bash
+# Navigate to backend directory
 cd backend
-# If using the existing virtual environment:
+
+# Activate virtual environment
+# Windows:
 ..\venv\Scripts\activate
-# Run the FastAPI server:
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
+# Linux/macOS:
+source ../venv/bin/activate
+
+# Install requirements (if setting up fresh)
+pip install -r requirements.txt
+
+# Run automated test suite
+python test_api.py
+
+# Start FastAPI server on port 8000
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-> **Backend URL:** `http://127.0.0.1:8000`  
-> **Interactive Swagger API Docs:** `http://127.0.0.1:8000/docs`
+The API will be accessible at:
+- **API Base:** `http://localhost:8000/api`
+- **Interactive Swagger Docs:** `http://localhost:8000/docs`
+- **System Health:** `http://localhost:8000/api/health`
 
----
+### 3. Frontend Installation & Startup
 
-### Step 4: Run the React + Vite Frontend
-
-Open a second terminal in VS Code:
-
-```powershell
+```bash
+# Navigate to frontend directory
 cd frontend
+
+# Install packages
+npm install
+
+# Build production bundle
+npm run build
+
+# Start Vite development server
 npm run dev
 ```
 
-> **Frontend URL:** `http://localhost:5173`
+The frontend will be available at `http://localhost:5173`. When deployed with FastAPI, FastAPI automatically serves the built static frontend directly on `http://localhost:8000/`.
 
 ---
 
-### Step 5 (Optional): Run the Full Application in Standalone Mode
+## 🧪 Automated Test Suite Results
 
-The FastAPI backend automatically mounts and serves the production-built React application from `frontend/dist`. You can access the entire application directly on port 8000:
+The test suite in `backend/test_api.py` executes 7 automated end-to-end integration tests:
 
-```powershell
-# In the frontend directory:
-npm run build
-
-# In the backend directory:
-uvicorn main:app --port 8000
-```
-Then visit `http://localhost:8000` in any web browser!
-
----
-
-## 🧪 Testing the API
-
-To run the automated test suite verifying database models, live weather, USGS earthquake feeds, report lifecycle, and admin auth:
-
-```powershell
-cd backend
-..\venv\Scripts\python test_api.py
-```
-
-All 8 tests should pass with `OK`.
+| Test Case | Module | Result | Details |
+| :--- | :--- | :---: | :--- |
+| `test_health` | System | **PASSED** | Database connectivity & telemetry online |
+| `test_weather_endpoint` | Open-Meteo | **PASSED** | Real-time weather, humidity, and wind feeds |
+| `test_earthquakes_endpoint` | USGS GeoJSON | **PASSED** | Seismic magnitude filtering & South Asia highlighting |
+| `test_alerts_endpoint` | NDMA SACHET | **PASSED** | Warning portal verification |
+| `test_fires_endpoint` | NASA FIRMS | **PASSED** | Satellite thermal anomaly parser |
+| `test_ai_modules` | Nugen AI | **PASSED** | Modules 1, 2, and 3 structured classification & chat |
+| `test_full_emergency_workflow`| End-to-End | **PASSED** | Registration $\rightarrow$ Report $\rightarrow$ Unique ID $\rightarrow$ Tracking $\rightarrow$ PII Privacy $\rightarrow$ Responder Update $\rightarrow$ Route $\rightarrow$ Analytics |
 
 ---
 
-## 🔑 Default Administrator Credentials
+## 🌐 Production Deployment Guide
 
-When the database is first initialized, the following administrator is automatically seeded:
+### Frontend on Vercel
+1. Link your GitHub repository in the Vercel dashboard.
+2. Set Root Directory to `frontend`.
+3. Framework Preset: `Vite`.
+4. Add environment variable: `VITE_API_URL=https://your-backend-app.onrender.com`.
+5. Deploy.
 
-- **Email:** `admin@resqai.in`
-- **Password:** `ResqAdmin@2026`
-- **Portal:** Click **"Admin Portal"** on the navigation bar.
+### Backend on Render
+1. Create a new **Web Service** on Render pointing to your repository.
+2. Root Directory: `backend`.
+3. Environment: `Python 3`.
+4. Build Command: `pip install -r requirements.txt`.
+5. Start Command: `uvicorn main:app --host 0.0.0.0 --port $PORT`.
+6. Configure environment variables (`DATABASE_URL`, `JWT_SECRET_KEY`, `NUGEN_API_KEY`, `NUGEN_MODEL`).
+
+### Database on Supabase
+1. Create a project at [supabase.com](https://supabase.com).
+2. Retrieve the PostgreSQL connection string from **Project Settings $\rightarrow$ Database**.
+3. Set `DATABASE_URL=postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres` in your Render environment variables. SQLAlchemy automatically creates all 11 tables and seeds initial demonstration records on startup.
 
 ---
 
-## 📡 Live Integration Status
+## 👥 Hackathon Pre-Seeded Accounts
 
-| Integration | Status | Notes |
-| :--- | :--- | :--- |
-| **Open-Meteo Weather API** | ✅ **Live & Verified** | Live weather, temp, wind, rain, and 5-day daily forecasts for major Indian cities. Requires no API key. |
-| **USGS Earthquake GeoJSON API** | ✅ **Live & Verified** | Real-time seismic monitor across the globe with South Asia plate highlights. Requires no API key. |
-| **NDMA SACHET Portal** | ✅ **Connected / Portal Linked** | Connects to public bulletin gateway; provides direct links to official NDMA SACHET CAP alerts. Never fabricates fake warnings. |
-| **NASA FIRMS** | ⚠️ **Standby (Key Required)** | Displays thermal hotspots when `NASA_FIRMS_MAP_KEY` is provided. Clearly labels detections as unverified satellite hotspots. |
-| **Nugen AI Assistant** | ⚠️ **Standby (Key Required)** | Fully implemented backend endpoint with live telemetry grounding. Activated by setting `NUGEN_API_KEY` and `NUGEN_MODEL_ID` in `.env`. Displays graceful setup guidance when unconfigured. |
+For presentation and live demonstration:
+
+| Role | Email | Password | Permissions |
+| :--- | :--- | :--- | :--- |
+| **Administrator** | `admin@resqai.in` | `ResqAdmin@2026` | Full system control, user verification, audit logs, resource creation |
+| **Field Responder** | `responder@resqai.in` | `Responder@2026` | Triage queue, confidential contact numbers, status progression, unit dispatch |
+| **Citizen** | `citizen@resqai.in` | `Citizen@2026` | Emergency reporting, SOS beacons, incident tracking, personal emergency contacts |
 
 ---
 
-## ⚠️ Emergency Disclaimer
+## 📜 Compliance & Safety Disclaimers
 
-> **RESQAI is an informational intelligence and community reporting platform. It is NOT an official emergency dispatch service.**  
-> In immediate danger, citizens should call **India's unified emergency number 112** directly.
+1. **National Emergency 112 Priority:** RESQAI displays prominent notices on all views emphasizing that web reports do not substitute for dialing India's unified emergency number **112**.
+2. **Citizen Data Confidentiality:** Citizen names and contact numbers are encrypted and restricted to verified rescue commanders. Public map markers display situational summaries only.
+3. **No Fabricated Data:** Telemetry feeds, earthquake records, weather forecasts, and operational analytics are grounded in verified databases and live APIs.

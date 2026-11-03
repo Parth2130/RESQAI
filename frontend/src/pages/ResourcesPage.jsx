@@ -1,15 +1,21 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
+  Building2, 
   PhoneCall, 
   ExternalLink, 
   ShieldCheck, 
-  Building2, 
-  AlertOctagon, 
-  Compass, 
+  Search, 
+  Filter, 
+  Plus, 
+  MapPin, 
+  Users, 
+  Activity, 
   HeartHandshake, 
-  Info,
-  Phone
+  Phone,
+  AlertCircle
 } from 'lucide-react';
+import { api } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const HELPLINES = [
   { number: '112', title: 'National Emergency Helpline (Unified)', agency: 'Ministry of Home Affairs', type: 'All-in-one Emergency', badge: 'Critical' },
@@ -22,201 +28,357 @@ const HELPLINES = [
   { number: '1098', title: 'Childline Emergency Care', agency: 'Ministry of WCD', type: 'Child Protection', badge: 'Support' }
 ];
 
-const OFFICIAL_PORTALS = [
-  {
-    name: 'NDMA SACHET Portal',
-    url: 'https://sachet.ndma.gov.in/',
-    description: 'National public alert system for geo-targeted weather warnings and disaster bulletins across India.'
-  },
-  {
-    name: 'India Meteorological Department (IMD)',
-    url: 'https://mausam.imd.gov.in/',
-    description: 'Official national weather forecasts, cyclone tracking, and severe weather warnings for all meteorological sub-divisions.'
-  },
-  {
-    name: 'Central Water Commission (CWC) Flood Portal',
-    url: 'https://ffs.india-water.gov.in/',
-    description: 'Live river water levels, dam discharge notifications, and basin-level flood forecasts.'
-  },
-  {
-    name: 'National Disaster Management Authority (NDMA)',
-    url: 'https://ndma.gov.in/',
-    description: 'Apex body for disaster management policies, mitigation frameworks, and national guidelines in India.'
-  },
-  {
-    name: 'National Disaster Response Force (NDRF)',
-    url: 'https://ndrf.gov.in/',
-    description: 'Specialized response force for life-saving operations during natural and man-made disasters.'
-  },
-  {
-    name: 'Geological Survey of India (GSI Landslide Portal)',
-    url: 'https://www.gsi.gov.in/',
-    description: 'Landslide susceptibility mapping, hazard zonation, and rain-induced landslide bulletins.'
-  }
-];
-
 export default function ResourcesPage() {
+  const { user, token, isAdmin } = useAuth();
+  const [resources, setResources] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Admin Add Resource Modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [modalForm, setModalForm] = useState({
+    name: '',
+    category: 'Hospital',
+    location: '',
+    latitude: 18.5204,
+    longitude: 73.8567,
+    contact: '',
+    availability: 'Available',
+    capacity: 100,
+    current_occupancy: 20,
+    notes: ''
+  });
+
+  const loadResources = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getResources({
+        category: selectedCategory !== 'all' ? selectedCategory : undefined
+      });
+      setResources(data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadResources();
+  }, [selectedCategory]);
+
+  const handleCreateResource = async (e) => {
+    e.preventDefault();
+    try {
+      await api.createResource(token, {
+        ...modalForm,
+        latitude: parseFloat(modalForm.latitude),
+        longitude: parseFloat(modalForm.longitude),
+        capacity: parseInt(modalForm.capacity, 10),
+        current_occupancy: parseInt(modalForm.current_occupancy, 10)
+      });
+      setShowAddModal(false);
+      loadResources();
+    } catch (err) {
+      alert("Failed to add resource: " + err.message);
+    }
+  };
+
+  const filteredResources = resources.filter(r => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      r.name?.toLowerCase().includes(q) ||
+      r.location?.toLowerCase().includes(q) ||
+      r.category?.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Header */}
-      <div className="pb-4 border-b border-resq-border/80">
-        <span className="text-xs font-bold uppercase tracking-widest text-resq-cyan block mb-1">
-          Verified Directory
-        </span>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-          Emergency Resources & National Helplines
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-400 mt-1">
-          Government hotlines, official ministerial portals, and verified medical registry links for India.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-pastel-border">
+        <div>
+          <div className="flex items-center space-x-2">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+              Emergency Resource Center
+            </h1>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              VERIFIED FACILITIES
+            </span>
+          </div>
+          <p className="text-xs text-pastel-muted">
+            Directory of operational trauma hospitals, relief shelters, fire brigades, and specialized watercraft units.
+          </p>
+        </div>
+
+        {isAdmin && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2 rounded-xl bg-[#5278E8] hover:bg-[#4365D0] text-white font-bold text-xs shadow-soft transition flex items-center space-x-1.5 self-start sm:self-auto"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Verified Resource</span>
+          </button>
+        )}
       </div>
 
-      {/* Prominent Unified 112 Hero Banner */}
-      <div className="glass-panel-danger rounded-3xl p-6 sm:p-8 border-red-500/40 shadow-2xl relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/40 inline-flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-red-400 animate-ping"></span>
-              India's Single Emergency Number
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-black text-white">
-              Dial 112 for All Life-Critical Emergencies
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              The Emergency Response Support System (ERSS) provides a unified pan-India helpline for Police, Fire, Ambulance, and Disaster assistance. It is accessible 24/7 from any phone without requiring mobile data.
-            </p>
-          </div>
-
-          <div className="flex-shrink-0">
-            <a
-              href="tel:112"
-              className="inline-flex items-center space-x-2.5 px-8 py-4 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-black text-lg shadow-glow-red border border-red-400/40 transition-all hover:scale-105 active:scale-95"
+      {/* Filter Tabs & Search */}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        {/* Categories */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {['all', 'Hospital', 'Shelter', 'Fire Station', 'Ambulance', 'Rescue Team', 'Relief Center'].map(cat => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                selectedCategory === cat
+                  ? 'bg-[#5278E8] text-white shadow-soft'
+                  : 'bg-white border border-pastel-border text-slate-700 hover:bg-slate-50'
+              }`}
             >
-              <PhoneCall className="w-6 h-6 animate-bounce" />
-              <span>DIAL 112</span>
-            </a>
-          </div>
+              {cat === 'all' ? 'All Resources' : cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div className="relative w-full md:w-64">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search resources or cities..."
+            className="w-full pl-9 pr-3 py-2 rounded-xl text-xs bg-white border border-pastel-border focus:border-[#5278E8] outline-none text-slate-800"
+          />
         </div>
       </div>
 
-      {/* National Helplines Grid */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-bold text-white flex items-center gap-2">
-          <Phone className="w-4 h-4 text-resq-cyan" />
-          Verified Emergency Hotlines (India)
-        </h3>
+      {/* Resources Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredResources.map((res) => (
+          <div key={res.id} className="pastel-card p-6 space-y-4 hover:shadow-soft transition-all">
+            <div className="flex items-start justify-between">
+              <div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-[#5278E8]">
+                  {res.category}
+                </span>
+                <h3 className="font-extrabold text-slate-900 text-sm mt-1">{res.name}</h3>
+                <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                  <MapPin className="w-3 h-3 text-slate-400" />
+                  <span>{res.location}</span>
+                </p>
+              </div>
+
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                res.availability === 'Available' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+              }`}>
+                {res.availability}
+              </span>
+            </div>
+
+            {/* Capacity Meter */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[11px] text-slate-600 font-medium">
+                <span>Occupancy:</span>
+                <span className="font-bold text-slate-900">{res.current_occupancy} / {res.capacity}</span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div 
+                  className="h-full rounded-full bg-[#5278E8] transition-all"
+                  style={{ width: `${Math.min(100, Math.round((res.current_occupancy / (res.capacity || 1)) * 100))}%` }}
+                />
+              </div>
+            </div>
+
+            {res.notes && (
+              <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded-xl border border-pastel-border leading-relaxed">
+                {res.notes}
+              </p>
+            )}
+
+            <div className="pt-2 border-t border-pastel-border flex items-center justify-between text-xs">
+              {res.contact ? (
+                <a
+                  href={`tel:${res.contact}`}
+                  className="font-bold text-[#5278E8] flex items-center gap-1 hover:underline"
+                >
+                  <PhoneCall className="w-3.5 h-3.5" />
+                  <span>{res.contact}</span>
+                </a>
+              ) : (
+                <span className="text-slate-400">Direct dial unavailable</span>
+              )}
+              <span className="text-[10px] text-slate-400">Verified Asset</span>
+            </div>
+          </div>
+        ))}
+
+        {filteredResources.length === 0 && (
+          <div className="col-span-full pastel-card p-12 text-center text-xs text-slate-400">
+            {loading ? 'Retrieving verified resources...' : 'No emergency resources match the current filter.'}
+          </div>
+        )}
+      </div>
+
+      {/* Official Emergency Helplines Directory */}
+      <div className="pastel-card p-6 sm:p-8 space-y-6 shadow-soft">
+        <div className="flex items-center justify-between pb-4 border-b border-pastel-border">
+          <div>
+            <h3 className="font-extrabold text-slate-900 text-lg">
+              National Emergency Helpline Directory (India)
+            </h3>
+            <p className="text-xs text-pastel-muted">
+              Direct access to verified national, state, and specialized emergency helplines.
+            </p>
+          </div>
+          <span className="text-xs font-bold text-rose-600 bg-rose-50 px-3 py-1 rounded-full border border-rose-200">
+            24x7 TOLL FREE
+          </span>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {HELPLINES.map((item) => (
-            <div
-              key={item.number}
-              className="glass-panel p-5 rounded-2xl border-resq-border hover:border-resq-cyan/50 flex flex-col justify-between transition"
-            >
+          {HELPLINES.map((h, idx) => (
+            <div key={idx} className="p-4 rounded-2xl bg-white border border-pastel-border hover:border-indigo-200 hover:shadow-xs transition space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-2xl font-black text-[#5278E8]">{h.number}</span>
+                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                  h.badge === 'Critical' ? 'bg-rose-100 text-rose-700' : 'bg-indigo-50 text-indigo-700'
+                }`}>
+                  {h.badge}
+                </span>
+              </div>
+              <h4 className="text-xs font-bold text-slate-900 leading-snug">{h.title}</h4>
+              <p className="text-[11px] text-slate-500">{h.agency}</p>
+              <a
+                href={`tel:${h.number}`}
+                className="mt-2 w-full py-1.5 rounded-lg bg-indigo-50 hover:bg-[#5278E8] hover:text-white text-[#5278E8] font-bold text-xs flex items-center justify-center space-x-1.5 transition"
+              >
+                <Phone className="w-3 h-3" />
+                <span>Call {h.number}</span>
+              </a>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Add Resource Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
+          <form onSubmit={handleCreateResource} className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-4 shadow-soft-lg border border-pastel-border">
+            <h3 className="font-extrabold text-slate-900 text-base">Register New Emergency Facility</h3>
+            
+            <div className="space-y-3 text-xs">
               <div>
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <span className="text-2xl font-black font-mono text-cyan-400">
-                    {item.number}
-                  </span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                    {item.badge}
-                  </span>
+                <label className="font-bold text-slate-700 block mb-1">Facility Name</label>
+                <input
+                  type="text"
+                  required
+                  value={modalForm.name}
+                  onChange={(e) => setModalForm({ ...modalForm, name: e.target.value })}
+                  placeholder="e.g. District Civil Trauma Hospital"
+                  className="w-full p-2.5 rounded-xl border border-pastel-border bg-slate-50 text-slate-800"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Category</label>
+                  <select
+                    value={modalForm.category}
+                    onChange={(e) => setModalForm({ ...modalForm, category: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-pastel-border bg-slate-50 text-slate-800 font-bold"
+                  >
+                    {['Hospital', 'Shelter', 'Fire Station', 'Ambulance', 'Rescue Team', 'Relief Center'].map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
                 </div>
-                <h4 className="text-sm font-bold text-white mb-1">
-                  {item.title}
-                </h4>
-                <p className="text-xs text-slate-400">
-                  {item.agency}
-                </p>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Total Capacity</label>
+                  <input
+                    type="number"
+                    value={modalForm.capacity}
+                    onChange={(e) => setModalForm({ ...modalForm, capacity: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-pastel-border bg-slate-50 text-slate-800"
+                  />
+                </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-resq-border/60 flex items-center justify-between">
-                <span className="text-[11px] text-slate-500">{item.type}</span>
-                <a
-                  href={`tel:${item.number}`}
-                  className="text-xs font-bold text-resq-cyan hover:underline flex items-center gap-1"
-                >
-                  <span>Call</span>
-                  <PhoneCall className="w-3 h-3" />
-                </a>
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Location & City</label>
+                <input
+                  type="text"
+                  required
+                  value={modalForm.location}
+                  onChange={(e) => setModalForm({ ...modalForm, location: e.target.value })}
+                  placeholder="e.g. Shivaji Nagar, Pune"
+                  className="w-full p-2.5 rounded-xl border border-pastel-border bg-slate-50 text-slate-800"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  step="any"
+                  value={modalForm.latitude}
+                  onChange={(e) => setModalForm({ ...modalForm, latitude: e.target.value })}
+                  placeholder="Latitude"
+                  className="p-2.5 rounded-xl border border-pastel-border bg-slate-50 text-slate-800"
+                />
+                <input
+                  type="number"
+                  step="any"
+                  value={modalForm.longitude}
+                  onChange={(e) => setModalForm({ ...modalForm, longitude: e.target.value })}
+                  placeholder="Longitude"
+                  className="p-2.5 rounded-xl border border-pastel-border bg-slate-50 text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Contact Phone</label>
+                <input
+                  type="text"
+                  value={modalForm.contact}
+                  onChange={(e) => setModalForm({ ...modalForm, contact: e.target.value })}
+                  placeholder="+91 20 2612 8000"
+                  className="w-full p-2.5 rounded-xl border border-pastel-border bg-slate-50 text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Operational Notes</label>
+                <textarea
+                  value={modalForm.notes}
+                  onChange={(e) => setModalForm({ ...modalForm, notes: e.target.value })}
+                  placeholder="Trauma beds, generator backup, water filtration, etc."
+                  className="w-full p-2.5 rounded-xl border border-pastel-border bg-slate-50 text-slate-800"
+                />
               </div>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Official Government Portals */}
-      <div className="space-y-4 pt-4">
-        <h3 className="text-lg font-bold text-white flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          Official Disaster Management & Telemetry Authorities
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {OFFICIAL_PORTALS.map((portal) => (
-            <div
-              key={portal.name}
-              className="glass-panel p-5 rounded-2xl border-resq-border hover:border-slate-600 flex flex-col justify-between transition"
-            >
-              <div className="space-y-2">
-                <h4 className="text-sm font-bold text-white">
-                  {portal.name}
-                </h4>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  {portal.description}
-                </p>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-resq-border/60">
-                <a
-                  href={portal.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center space-x-1 text-xs text-cyan-400 hover:text-cyan-300 font-semibold"
-                >
-                  <span>Access Official Portal</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Hospital & Health Facility Finder Guidance */}
-      <div className="glass-panel p-6 sm:p-8 rounded-3xl border-resq-border space-y-4">
-        <div className="flex items-start space-x-3">
-          <Building2 className="w-6 h-6 text-emerald-400 flex-shrink-0 mt-0.5" />
-          <div className="space-y-2">
-            <h3 className="text-base font-bold text-white">
-              Verified Hospital & Medical Facility Directory Notice
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              In accordance with strict safety protocols, <strong>RESQAI never displays invented, unverified, or static mock hospital beds or phone numbers</strong>. For verified, accredited government and private hospitals across India, citizens should consult the official registry provided by the National Health Authority:
-            </p>
-            <div className="pt-2 flex flex-wrap gap-3">
-              <a
-                href="https://facility.abdm.gov.in/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-resq-dark hover:bg-slate-800 text-xs font-semibold text-emerald-400 border border-emerald-500/30 transition"
+            <div className="flex items-center justify-end space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
               >
-                <span>Ayushman Bharat Health Facility Registry (Official)</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-
-              <a
-                href="https://www.nhp.gov.in/hospital-search"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-resq-dark hover:bg-slate-800 text-xs font-semibold text-slate-300 border border-resq-border transition"
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-[#5278E8] text-white shadow-soft"
               >
-                <span>National Health Portal Directory</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
+                Save Facility
+              </button>
             </div>
-          </div>
+          </form>
         </div>
-      </div>
+      )}
     </div>
   );
 }

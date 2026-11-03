@@ -1,16 +1,204 @@
-import httpx
+import os
+import json
+import re
 from datetime import datetime
 from typing import Dict, Any, List, Optional
+import httpx
 from config import NUGEN_API_KEY, NUGEN_MODEL_ID, NUGEN_API_URL
 
 def is_nugen_configured() -> bool:
-    return bool(NUGEN_API_KEY and NUGEN_API_KEY.strip() and NUGEN_MODEL_ID and NUGEN_MODEL_ID.strip())
+    """Returns True if Nugen API key and Model ID are configured."""
+    key = os.getenv("NUGEN_API_KEY", NUGEN_API_KEY)
+    model = os.getenv("NUGEN_MODEL", os.getenv("NUGEN_MODEL_ID", NUGEN_MODEL_ID))
+    return bool(key and key.strip() and model and model.strip())
+
+def get_nugen_config():
+    key = os.getenv("NUGEN_API_KEY", NUGEN_API_KEY).strip()
+    model = os.getenv("NUGEN_MODEL", os.getenv("NUGEN_MODEL_ID", NUGEN_MODEL_ID)).strip()
+    url = os.getenv("NUGEN_BASE_URL", NUGEN_API_URL).strip()
+    if not url.endswith("/chat/completions") and not url.endswith("/completions"):
+        if url.endswith("/"):
+            url = f"{url}chat/completions"
+        else:
+            url = f"{url}/chat/completions"
+    return key, model, url
 
 LANGUAGE_INSTRUCTIONS = {
     "en": "Respond in clear, accessible English.",
     "hi": "कृपया हिंदी में उत्तर दें (Respond in natural, simple Hindi).",
     "mr": "कृपया मराठीत उत्तर द्या (Respond in natural, clear Marathi)."
 }
+
+# ============================================================================
+# AI MODULE 1: EMERGENCY CLASSIFICATION
+# ============================================================================
+
+CLASSIFICATION_SYSTEM_PROMPT = """You are RESQAI's Emergency Classification Intelligence Agent.
+Analyze the citizen's emergency report description and extract structured triage information.
+
+Output strictly valid JSON with this exact schema:
+{
+  "emergency_type": "Flood" | "Earthquake" | "Fire" | "Landslide" | "Cyclone" | "Accident" | "Medical Emergency" | "Other",
+  "severity": "Critical" | "High" | "Medium" | "Low",
+  "priority": "Urgent" | "High" | "Standard" | "Low",
+  "vulnerable_people": true | false,
+  "summary": "1-2 sentence concise factual incident summary.",
+  "recommended_action": "Initial recommended immediate safety or responder check.",
+  "requires_human_review": true,
+  "confidence_score": 0.0 to 1.0
+}
+Do not include any conversational filler. Only output the JSON object.
+"""
+
+def fallback_classify_emergency(description: str, location: Optional[str] = None) -> Dict[str, Any]:
+    """Transparent rule-based fallback classification when Nugen AI is offline or unconfigured."""
+    desc_lower = description.lower()
+    
+    # Category detection
+    if any(k in desc_lower for k in ["flood", "waterlog", "submerge", "river", "drowning", "dam"]):
+        emergency_type = "Flood"
+    elif any(k in desc_lower for k in ["fire", "blaze", "smoke", "flame", "burning", "explosion"]):
+        emergency_type = "Fire"
+    elif any(k in desc_lower for k in ["earthquake", "tremor", "quake", "aftershock", "crack in building"]):
+        emergency_type = "Earthquake"
+    elif any(k in desc_lower for k in ["landslide", "mudslide", "rockslide", "hill collapse", "debris"]):
+        emergency_type = "Landslide"
+    elif any(k in desc_lower for k in ["cyclone", "hurricane", "typhoon", "storm", "gale"]):
+        emergency_type = "Cyclone"
+    elif any(k in desc_lower for k in ["accident", "collision", "crash", "overturned"]):
+        emergency_type = "Accident"
+    elif any(k in desc_lower for k in ["heart attack", "unconscious", "bleeding", "medical", "pregnant", "ambulance"]):
+        emergency_type = "Medical Emergency"
+    else:
+        emergency_type = "Other"
+
+    # Vulnerable population detection
+    vulnerable = any(k in desc_lower for k in ["child", "baby", "infant", "elderly", "old", "pregnant", "disabled", "wheelchair", "bedridden"])
+
+    # Severity determination
+    if any(k in desc_lower for k in ["trapped", "dying", "drowning", "unconscious", "rooftop", "severe", "burning inside", "critical", "collapsed"]):
+        severity = "Critical"
+        priority = "Urgent"
+    elif any(k in desc_lower for k in ["rising", "blocked", "injured", "high", "spreading"]):
+        severity = "High"
+        priority = "High"
+    elif any(k in desc_lower for k in ["minor", "slow", "low", "caution"]):
+        severity = "Low"
+        priority = "Low"
+    else:
+        severity = "Medium"
+        priority = "Standard"
+
+    loc_str = f" in {location}" if location else ""
+    summary = f"Reported {emergency_type.lower()} situation{loc_str}: {description[:120]}..."
+
+    return {
+        "emergency_type": emergency_type,
+        "severity": severity,
+        "priority": priority,
+        "vulnerable_people": vulnerable,
+        "summary": summary,
+        "recommended_action": "Field verification and dispatch verification by emergency operations center.",
+        "requires_human_review": True,
+        "confidence_score": 0.82,
+        "provider": "Rule-based Engine (Nugen Standby)"
+    }
+
+async def classify_emergency_report(description: str, location: Optional[str] = None) -> Dict[str, Any]:
+    """AI Module 1: Classifies citizen report using Nugen API with robust fallback."""
+    if not is_nugen_configured():
+        return fallback_classify_emergency(description, location)
+
+    key, model, url = get_nugen_config()
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    user_prompt = f"Incident Description: {description}\nLocation: {location or 'Not provided'}"
+    
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": CLASSIFICATION_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.1,
+        "max_tokens": 400
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=18.0) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                content = data["choices"][0]["message"]["content"].strip()
+                # Extract JSON block
+                json_match = re.search(r"\{.*\}", content, re.DOTALL)
+                if json_match:
+                    parsed = json.loads(json_match.group(0))
+                    parsed["provider"] = f"Nugen AI ({model})"
+                    parsed["requires_human_review"] = True
+                    return parsed
+    except Exception as e:
+        print(f"[NUGEN-CLASSIFY-ERR] {e}")
+
+    # Fallback if API fails or returns unparseable content
+    fallback = fallback_classify_emergency(description, location)
+    fallback["provider"] = "Rule-based Engine (Nugen Unreachable/Fallback)"
+    return fallback
+
+# ============================================================================
+# AI MODULE 2: RISK ASSESSMENT
+# ============================================================================
+
+async def assess_incident_risk(
+    incident_type: str,
+    severity: str,
+    people_affected: int = 1,
+    people_needing_assistance: int = 0,
+    vulnerable_present: bool = False,
+    weather_info: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """AI Module 2: Multi-factor risk calculation combining type, severity, population, and weather."""
+    from risk_engine import calculate_risk
+    
+    env_alert = False
+    if weather_info:
+        precip = weather_info.get("precipitation", 0)
+        wind = weather_info.get("wind_speed", 0)
+        if precip > 25.0 or wind > 55.0:
+            env_alert = True
+
+    base = calculate_risk(
+        incident_type=incident_type,
+        severity=severity,
+        people_affected=people_affected,
+        people_needing_assistance=people_needing_assistance,
+        vulnerable_present=vulnerable_present,
+        environmental_hazard_alert=env_alert
+    )
+
+    breakdown = base.get("weights_breakdown", {})
+    return {
+        "risk_level": base.get("risk_level", "Medium"),
+        "score": float(base.get("risk_score", 50)),
+        "hazard_points": float(breakdown.get("hazard_type_points", 0.0)),
+        "severity_points": float(breakdown.get("severity_points", 0.0)),
+        "assistance_points": float(breakdown.get("assistance_points", 0.0)),
+        "vulnerable_points": float(breakdown.get("vulnerability_bonus", 0.0)),
+        "environmental_points": float(breakdown.get("weather_bonus", 0.0)),
+        "explanation": f"Automated risk grade: {base.get('risk_level', 'Medium')} ({base.get('risk_score', 50)}/100). {base.get('priority', '')}",
+        "contributing_factors": base.get("factors", []),
+        "recommendations": [
+            "Maintain situational awareness and notify sector responders.",
+            "Verify road conditions and access corridors before deploying heavy vehicles.",
+            "Confirm availability of nearest designated medical or shelter facility."
+        ],
+        "limitations": base.get("limitations", []),
+        "ai_generated": is_nugen_configured(),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+# ============================================================================
+# AI MODULE 3: EMERGENCY ASSISTANT CHATBOT
+# ============================================================================
 
 SYSTEM_PROMPT = """You are RESQAI Emergency Preparedness Assistant, an intelligent safety guidance platform designed for citizens and community volunteers in India.
 
@@ -34,18 +222,47 @@ async def generate_chat_response(
     timestamp = datetime.utcnow().isoformat() + "Z"
 
     if not is_nugen_configured():
+        # Intelligent contextual standby responses
+        msg_l = message.lower()
+        if "flood" in msg_l:
+            resp_text = (
+                "🚨 **Flood Safety Guidelines (NDMA Protocol):**\n"
+                "• **Immediate Action:** Move to higher floors or designated high ground immediately. Do NOT walk, swim, or drive through moving water.\n"
+                "• **Electricity:** Turn off main power and gas lines before water enters.\n"
+                "• **Emergency Number:** If trapped or in immediate peril, dial national emergency **112** or NDMA helpline **1070**.\n"
+                "• *(Note: RESQAI AI Assistant is currently running in Standby Mode. Configure NUGEN_API_KEY in .env for active generative LLM inference.)*"
+            )
+        elif "earthquake" in msg_l:
+            resp_text = (
+                "🚨 **Earthquake Safety Protocol (Drop, Cover, Hold):**\n"
+                "• **Indoors:** DROP to hands and knees. COVER head and neck under a sturdy table/desk. HOLD ON until shaking stops.\n"
+                "• **Avoid:** Windows, heavy bookcases, overhead fixtures, and elevators.\n"
+                "• **Outdoors:** Move to an open area away from power lines, poles, and masonry buildings.\n"
+                "• **Emergency Number:** For rescue assistance, dial **112**.\n"
+                "• *(Note: RESQAI AI Assistant is running in Standby Mode.)*"
+            )
+        else:
+            resp_text = (
+                "👋 **Welcome to RESQAI Emergency Safety Assistant**\n\n"
+                "I am here to help you navigate disaster preparedness, safety steps, and emergency reporting.\n\n"
+                "• **For Immediate Life Danger:** Call India's national emergency number **112**.\n"
+                "• **Report an Incident:** Use the 'Report Emergency' or 'SOS Distress' buttons on the portal.\n"
+                "• **Live Feeds:** Check the Live Operations Map for real-time seismic (USGS) and weather (Open-Meteo) status.\n\n"
+                "*(Note: AI Assistant is in Local Standby Mode. Configure NUGEN_API_KEY and NUGEN_MODEL in your environment for custom generative AI answers.)*"
+            )
+
         return {
             "configured": False,
-            "response": "AI Assistant is not configured. Please configure Nugen credentials (NUGEN_API_KEY and NUGEN_MODEL_ID in .env).",
+            "response": resp_text,
             "language": language,
-            "grounding": None,
-            "provider": "Nugen AI (Unconfigured)",
+            "grounding": live_grounding,
+            "provider": "RESQAI Standby Safety System (Nugen Unconfigured)",
             "timestamp": timestamp
         }
 
+    key, model, url = get_nugen_config()
     lang_rule = LANGUAGE_INSTRUCTIONS.get(language, LANGUAGE_INSTRUCTIONS["en"])
     
-    # Grounding context text
     grounding_text = ""
     if live_grounding:
         grounding_text += "\n--- VERIFIED LIVE TELEMETRY CONTEXT ---\n"
@@ -60,10 +277,8 @@ async def generate_chat_response(
         grounding_text += "--- END LIVE TELEMETRY ---\n"
 
     system_instruction = f"{SYSTEM_PROMPT}\n{lang_rule}\n{grounding_text}"
-
     messages_payload = [{"role": "system", "content": system_instruction}]
 
-    # Append recent conversation history (up to last 6 messages)
     if history:
         for msg in history[-6:]:
             if msg.get("role") in ["user", "assistant"] and msg.get("content"):
@@ -75,12 +290,12 @@ async def generate_chat_response(
     messages_payload.append({"role": "user", "content": message})
 
     headers = {
-        "Authorization": f"Bearer {NUGEN_API_KEY.strip()}",
+        "Authorization": f"Bearer {key}",
         "Content-Type": "application/json"
     }
 
     payload = {
-        "model": NUGEN_MODEL_ID.strip(),
+        "model": model,
         "messages": messages_payload,
         "temperature": 0.3,
         "max_tokens": 800
@@ -88,41 +303,102 @@ async def generate_chat_response(
 
     try:
         async with httpx.AsyncClient(timeout=25.0) as client:
-            resp = await client.post(NUGEN_API_URL, json=payload, headers=headers)
+            resp = await client.post(url, json=payload, headers=headers)
             if resp.status_code != 200:
                 return {
                     "configured": True,
-                    "response": f"Nugen AI returned status {resp.status_code}: {resp.text[:200]}. Please check your API key and model quota.",
+                    "response": f"Nugen AI returned status {resp.status_code}: {resp.text[:200]}. Please check API key, model ID and credits.",
                     "language": language,
                     "grounding": live_grounding,
                     "provider": "Nugen AI",
                     "timestamp": timestamp
                 }
-
             data = resp.json()
-            choices = data.get("choices", [])
-            reply_content = ""
-            if choices and "message" in choices[0]:
-                reply_content = choices[0]["message"].get("content", "")
-            elif "output" in data:
-                reply_content = data["output"]
-            else:
-                reply_content = str(data)
-
+            reply = data["choices"][0]["message"]["content"]
             return {
                 "configured": True,
-                "response": reply_content,
+                "response": reply,
                 "language": language,
                 "grounding": live_grounding,
-                "provider": "Nugen AI",
+                "provider": f"Nugen AI ({model})",
                 "timestamp": timestamp
             }
     except Exception as e:
         return {
             "configured": True,
-            "response": f"Failed to connect to Nugen AI endpoint: {str(e)}. Please check your internet connection and API URL.",
+            "response": f"Encountered connection issue with Nugen AI: {str(e)}. In an emergency, always call 112 directly.",
             "language": language,
             "grounding": live_grounding,
-            "provider": "Nugen AI",
+            "provider": "Nugen AI (Error Fallback)",
             "timestamp": timestamp
         }
+
+# ============================================================================
+# AI MODULE 4: RESPONSE RECOMMENDATIONS
+# ============================================================================
+
+def generate_response_recommendations(incident_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """AI Module 4: Generates operational recommendations for emergency responders."""
+    e_type = incident_dict.get("emergency_type", "Other")
+    severity = incident_dict.get("severity", "Medium")
+    vulnerable = incident_dict.get("vulnerable_people", False)
+    affected = incident_dict.get("affected_count", 1)
+
+    categories = []
+    actions = []
+    precautions = []
+    evacuation = []
+
+    if e_type in ["Flood", "Waterlogging"]:
+        categories = ["Rescue teams", "Boats", "Ambulances", "Relief centers"]
+        actions.append("Establish boat launch staging point 500m up-gradient from submerged zone.")
+        actions.append("Deploy high-clearance SDRF/NDRF rescue boats equipped with life vests.")
+        precautions.append("Beware of submerged electrical transformers and rapid water currents.")
+        evacuation.append("Mandatory vertical evacuation to multi-story concrete municipal shelters.")
+    elif e_type in ["Fire"]:
+        categories = ["Fire stations", "Ambulances", "Rescue teams"]
+        actions.append("Dispatch primary structural water tenders and high-pressure hose units.")
+        actions.append("Establish a 200m safety perimeter; clear incoming ambulance corridor.")
+        precautions.append("Risk of toxic gas inhalation and backdraft in enclosed structures.")
+        evacuation.append("Evacuate downwind residential sectors immediately.")
+    elif e_type in ["Earthquake"]:
+        categories = ["Search and rescue teams", "Hospitals", "Ambulances"]
+        actions.append("Deploy acoustic life detectors and canine search units to collapsed structures.")
+        actions.append("Alert trauma response units at nearest tertiary hospitals.")
+        precautions.append("Expect severe aftershocks; avoid standing near unreinforced masonry.")
+        evacuation.append("Direct survivors to open parks, school athletic grounds, or designated safe zones.")
+    elif e_type in ["Landslide"]:
+        categories = ["Rescue teams", "Heavy earthmovers", "Ambulances"]
+        actions.append("Close affected highway or ghat pass immediately to all civilian traffic.")
+        actions.append("Deploy excavation machinery with soil stability sensors.")
+        precautions.append("Secondary slide hazard remains high if rain continues.")
+        evacuation.append("Evacuate homes situated on steep slope contours above and below the fracture line.")
+    else:
+        categories = ["Ambulances", "Rescue teams", "Hospitals"]
+        actions.append("Deploy rapid assessment reconnaissance team.")
+        precautions.append("Follow standard disaster triage protocols.")
+        evacuation.append("Evaluate necessity based on local field reconnaissance.")
+
+    if vulnerable:
+        actions.insert(0, "CRITICAL: Prioritize specialized extraction for vulnerable individuals (infants/elderly).")
+        categories.insert(0, "Specialized Medical Units")
+
+    briefing = (
+        f"Incident #{incident_dict.get('tracking_id', 'RQ')} ({e_type} - {severity}). "
+        f"{affected} people affected. "
+        f"Recommended immediate deployment: {', '.join(categories[:3])}. "
+        f"Primary precaution: {precautions[0] if precautions else 'Exercise caution'}."
+    )
+
+    return {
+        "incident_id": incident_dict.get("id", 0),
+        "emergency_type": e_type,
+        "recommended_resource_categories": categories,
+        "suggested_priority": "Urgent" if severity == "Critical" else "High",
+        "recommended_actions": actions,
+        "safety_precautions": precautions,
+        "evacuation_considerations": evacuation,
+        "responder_briefing": briefing,
+        "requires_human_approval": True,
+        "provider": "RESQAI Intelligence Decision Matrix"
+    }

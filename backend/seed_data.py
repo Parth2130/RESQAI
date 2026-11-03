@@ -1,14 +1,14 @@
 """
-RESQAI Seed Data Generator
-Populates the SQLite database with realistic demonstration disaster management records.
+RESQAI Enhanced Seed Data Generator
+Populates realistic demonstration disaster management records into PostgreSQL / SQLite.
 Idempotent: prevents duplicate records if executed repeatedly.
 """
 import json
 from datetime import datetime, timedelta
 from database import engine, SessionLocal, Base
-from models import Incident, Resource, Shelter, Alert, IncidentNote, ResourceAssignment
-from risk_engine import calculate_risk
-
+from models import User, Incident, IncidentUpdate, SOSRequest, Resource, Responder, Assignment, Notification, RiskAssessment, AuditLog
+from auth import hash_password
+from config import INITIAL_ADMIN_EMAIL, INITIAL_ADMIN_PASSWORD, INITIAL_ADMIN_NAME
 
 def seed_database():
     """Initializes tables and seeds initial demo records."""
@@ -16,378 +16,374 @@ def seed_database():
     db = SessionLocal()
 
     try:
-        # 1. Seed Shelters
-        if db.query(Shelter).count() == 0:
-            shelters_data = [
+        # 1. Users (Admin, Responder, Citizen)
+        admin = db.query(User).filter(User.email == INITIAL_ADMIN_EMAIL).first()
+        if not admin:
+            admin = User(
+                name=INITIAL_ADMIN_NAME,
+                email=INITIAL_ADMIN_EMAIL,
+                password_hash=hash_password(INITIAL_ADMIN_PASSWORD),
+                role="admin",
+                phone="+91 11 2343 8000",
+                agency="National Disaster Management Authority (NDMA)",
+                verified=True
+            )
+            db.add(admin)
+
+        responder_user = db.query(User).filter(User.email == "responder@resqai.in").first()
+        if not responder_user:
+            responder_user = User(
+                name="Inspector Rajesh Mane",
+                email="responder@resqai.in",
+                password_hash=hash_password("Responder@2026"),
+                role="responder",
+                phone="+91 98220 12345",
+                agency="National Disaster Response Force (NDRF)",
+                verified=True
+            )
+            db.add(responder_user)
+
+        citizen_user = db.query(User).filter(User.email == "citizen@resqai.in").first()
+        if not citizen_user:
+            citizen_user = User(
+                name="Pooja Sharma",
+                email="citizen@resqai.in",
+                password_hash=hash_password("Citizen@2026"),
+                role="citizen",
+                phone="+91 98765 43210",
+                agency=None,
+                verified=True
+            )
+            db.add(citizen_user)
+
+        db.commit()
+
+        # 2. Responders
+        if db.query(Responder).count() == 0:
+            responders_data = [
                 {
-                    "shelter_code": "SHL-101",
-                    "name": "Shivaji Nagar Municipal Community Center",
-                    "location_name": "Shivaji Nagar, Pune",
-                    "latitude": 18.5314,
-                    "longitude": 73.8446,
-                    "total_capacity": 250,
-                    "current_occupancy": 110,
-                    "facilities": json.dumps(["Clean Water", "Emergency Rations", "Backup Generator", "First Aid Station"]),
-                    "accessibility_support": True,
-                    "medical_support": True,
-                    "contact_details": "+91 20 2550 1100",
-                    "status": "Operational",
-                    "vulnerable_elderly": 22,
-                    "vulnerable_mobility": 8,
-                    "vulnerable_children": 35,
-                    "vulnerable_medical": 14,
-                    "is_demo": True
+                    "name": "Inspector Rajesh Mane",
+                    "badge_id": "NDRF-8821",
+                    "specialization": "Search and Rescue",
+                    "phone": "+91 98220 12345",
+                    "agency": "NDRF 5th Battalion",
+                    "status": "Available",
+                    "latitude": 18.5204,
+                    "longitude": 73.8567
                 },
                 {
-                    "shelter_code": "SHL-102",
-                    "name": "Kothrud Sports Complex Relief Haven",
-                    "location_name": "Near Kothrud Stand, Pune",
-                    "latitude": 18.5074,
-                    "longitude": 73.8077,
-                    "total_capacity": 400,
-                    "current_occupancy": 280,
-                    "facilities": json.dumps(["Water Filtration", "Cots", "Hot Meals", "Counseling Wing"]),
-                    "accessibility_support": True,
-                    "medical_support": False,
-                    "contact_details": "+91 20 2544 3290",
-                    "status": "Operational",
-                    "vulnerable_elderly": 45,
-                    "vulnerable_mobility": 12,
-                    "vulnerable_children": 60,
-                    "vulnerable_medical": 8,
-                    "is_demo": True
+                    "name": "Dr. Ananya Sen",
+                    "badge_id": "MED-7740",
+                    "specialization": "Emergency Medical & Trauma",
+                    "phone": "+91 98301 65432",
+                    "agency": "Disaster Medical Assistance Team",
+                    "status": "Available",
+                    "latitude": 18.5310,
+                    "longitude": 73.8440
                 },
                 {
-                    "shelter_code": "SHL-103",
-                    "name": "Aundh Multipurpose Auditorium",
-                    "location_name": "Aundh High Street, Pune",
-                    "latitude": 18.5580,
-                    "longitude": 73.8075,
-                    "total_capacity": 180,
-                    "current_occupancy": 165,
-                    "facilities": json.dumps(["Blankets", "Baby Care Station", "Solar Power"]),
-                    "accessibility_support": True,
-                    "medical_support": True,
-                    "contact_details": "+91 20 2588 4120",
-                    "status": "Near Capacity",
-                    "vulnerable_elderly": 30,
-                    "vulnerable_mobility": 14,
-                    "vulnerable_children": 42,
-                    "vulnerable_medical": 19,
-                    "is_demo": True
+                    "name": "Sub-Officer Sunil Pawar",
+                    "badge_id": "FIRE-4412",
+                    "specialization": "Structural Fire & HazMat",
+                    "phone": "+91 94220 99887",
+                    "agency": "Municipal Fire Brigade",
+                    "status": "Available",
+                    "latitude": 18.5080,
+                    "longitude": 73.8070
                 },
                 {
-                    "shelter_code": "SHL-104",
-                    "name": "Hadapsar Industrial Relief Depot",
-                    "location_name": "Hadapsar Bypass, Pune",
-                    "latitude": 18.5089,
-                    "longitude": 73.9259,
-                    "total_capacity": 300,
-                    "current_occupancy": 45,
-                    "facilities": json.dumps(["Dry Rations Storage", "Sanitation Blocks", "Security Guard"]),
-                    "accessibility_support": False,
-                    "medical_support": False,
-                    "contact_details": "+91 20 2687 0045",
-                    "status": "Operational",
-                    "vulnerable_elderly": 5,
-                    "vulnerable_mobility": 2,
-                    "vulnerable_children": 10,
-                    "vulnerable_medical": 1,
-                    "is_demo": True
+                    "name": "Capt. Preeti Deshmukh",
+                    "badge_id": "SDRF-3301",
+                    "specialization": "Flood Evacuation & Watercraft",
+                    "phone": "+91 98900 11223",
+                    "agency": "State Disaster Response Force",
+                    "status": "On Mission",
+                    "latitude": 18.5350,
+                    "longitude": 73.8490
                 }
             ]
-            for s in shelters_data:
-                db.add(Shelter(**s))
+            for r in responders_data:
+                db.add(Responder(**r))
             db.commit()
-            print("[INFO] Seeded Shelters successfully.")
 
-        # 2. Seed Resources
+        # 3. Emergency Resources
         if db.query(Resource).count() == 0:
             resources_data = [
                 {
-                    "resource_code": "RES-01",
-                    "name": "Pune Rapid Medical Unit 1",
-                    "resource_type": "Ambulance",
-                    "capabilities": json.dumps(["Advanced Life Support (ALS)", "Defibrillator", "Oxygen Ventilator"]),
-                    "location_name": "Swargate Base Camp",
-                    "latitude": 18.5018,
-                    "longitude": 73.8586,
-                    "status": "Available",
-                    "capacity": 2,
-                    "contact_info": "+91 98220 11001",
-                    "is_demo": True
+                    "name": "Sassoon General Hospital & Trauma Centre",
+                    "category": "Hospital",
+                    "location": "Near Pune Railway Station, Pune",
+                    "latitude": 18.5250,
+                    "longitude": 73.8740,
+                    "contact": "+91 20 2612 8000",
+                    "availability": "Available",
+                    "capacity": 350,
+                    "current_occupancy": 210,
+                    "verified": True,
+                    "notes": "Level 1 Trauma Unit, 40 ICU beds, 24/7 Blood Bank."
                 },
                 {
-                    "resource_code": "RES-02",
-                    "name": "Sahyadri Flood Rescue Boat Alpha",
-                    "resource_type": "Boat",
-                    "capabilities": json.dumps(["Motorized Inflatable", "Depth Sonar", "Life Rafts", "8-Person Extraction"]),
-                    "location_name": "Khadakwasla Water Rescue Station",
-                    "latitude": 18.4319,
-                    "longitude": 73.7629,
-                    "status": "Available",
-                    "capacity": 8,
-                    "contact_info": "+91 98220 11002",
-                    "is_demo": True
+                    "name": "Shivaji Nagar Municipal Community Shelter",
+                    "category": "Shelter",
+                    "location": "Shivaji Nagar, Pune",
+                    "latitude": 18.5314,
+                    "longitude": 73.8446,
+                    "contact": "+91 20 2550 1100",
+                    "availability": "Available",
+                    "capacity": 250,
+                    "current_occupancy": 110,
+                    "verified": True,
+                    "notes": "Emergency rations, backup power generator, baby care area, filtered water."
                 },
                 {
-                    "resource_code": "RES-03",
-                    "name": "NDRF Urban Search & Rescue Battalion 5",
-                    "resource_type": "Search-and-rescue unit",
-                    "capabilities": json.dumps(["Acoustic Void Detection", "Concrete Hydraulic Cutters", "Search Canines"]),
-                    "location_name": "Talegaon NDRF Depot",
-                    "latitude": 18.7300,
-                    "longitude": 73.6800,
-                    "status": "Available",
-                    "capacity": 15,
-                    "contact_info": "+91 98220 11003",
-                    "is_demo": True
-                },
-                {
-                    "resource_code": "RES-04",
-                    "name": "Pune Fire Brigade Squad Charlie",
-                    "resource_type": "Fire-response team",
-                    "capabilities": json.dumps(["High-Pressure Foam", "Breathing Apparatus", "Aerial Ladder"]),
-                    "location_name": "Bhavani Peth Station",
-                    "latitude": 18.5088,
-                    "longitude": 73.8643,
-                    "status": "Available",
-                    "capacity": 6,
-                    "contact_info": "+91 98220 11004",
-                    "is_demo": True
-                },
-                {
-                    "resource_code": "RES-05",
-                    "name": "Civil Defense Heavy Rescue Vehicle",
-                    "resource_type": "Rescue vehicle",
-                    "capabilities": json.dumps(["Winch 12-Ton", "Earthmover Blade", "Debris Clearance"]),
-                    "location_name": "Kothrud Fire Station",
+                    "name": "Kothrud Sports Complex Relief Shelter",
+                    "category": "Shelter",
+                    "location": "Near Kothrud Stand, Pune",
                     "latitude": 18.5074,
                     "longitude": 73.8077,
-                    "status": "Available",
-                    "capacity": 5,
-                    "contact_info": "+91 98220 11005",
-                    "is_demo": True
+                    "contact": "+91 20 2544 3290",
+                    "availability": "Available",
+                    "capacity": 400,
+                    "current_occupancy": 260,
+                    "verified": True,
+                    "notes": "Hot meal dispensary, accessibility ramps, cot bedding, psychological counseling."
                 },
                 {
-                    "resource_code": "RES-06",
-                    "name": "Disaster Relief Food & Water Convoy",
-                    "resource_type": "Relief supply vehicle",
-                    "capabilities": json.dumps(["2000 Rations", "5000L Potable Water Tanker", "Water Purification Tablets"]),
-                    "location_name": "Hadapsar Goods Depot",
-                    "latitude": 18.5089,
-                    "longitude": 73.9259,
-                    "status": "Available",
-                    "capacity": 4,
-                    "contact_info": "+91 98220 11006",
-                    "is_demo": True
+                    "name": "Central Fire Brigade Headquarters",
+                    "category": "Fire Station",
+                    "location": "Bhawani Peth, Pune",
+                    "latitude": 18.5135,
+                    "longitude": 73.8685,
+                    "contact": "+91 20 2645 1707",
+                    "availability": "Available",
+                    "capacity": 15,
+                    "current_occupancy": 4,
+                    "verified": True,
+                    "notes": "6 heavy foam tenders, 2 hydraulic ladders (54m), 4 high-pressure pumpers."
+                },
+                {
+                    "name": "108 Advanced Cardiac Life Support Ambulance Unit 12",
+                    "category": "Ambulance",
+                    "location": "Deccan Gymkhana, Pune",
+                    "latitude": 18.5167,
+                    "longitude": 73.8417,
+                    "contact": "108 / +91 20 2553 4400",
+                    "availability": "Available",
+                    "capacity": 2,
+                    "current_occupancy": 0,
+                    "verified": True,
+                    "notes": "Equipped with transport ventilator, monitor/defibrillator, paramedic onboard."
+                },
+                {
+                    "name": "NDRF Flood Evacuation Unit Delta (3 Inflatable Boats)",
+                    "category": "Rescue Team",
+                    "location": "Mula-Mutha Confluence, Pune",
+                    "latitude": 18.5360,
+                    "longitude": 73.8680,
+                    "contact": "+91 11 2436 3260",
+                    "availability": "Available",
+                    "capacity": 30,
+                    "current_occupancy": 12,
+                    "verified": True,
+                    "notes": "3 motorized rubber dinghies, OBM motors, 60 life jackets, throw-ropes."
+                },
+                {
+                    "name": "Red Cross Emergency Relief Supply Depot",
+                    "category": "Relief Center",
+                    "location": "Camp Area, Pune",
+                    "latitude": 18.5100,
+                    "longitude": 73.8800,
+                    "contact": "+91 20 2634 5000",
+                    "availability": "Available",
+                    "capacity": 500,
+                    "current_occupancy": 140,
+                    "verified": True,
+                    "notes": "Dry ration kits, hygiene packs, tarpaulins, chlorine purification tablets."
                 }
             ]
-            for r in resources_data:
-                db.add(Resource(**r))
+            for res in resources_data:
+                db.add(Resource(**res))
             db.commit()
-            print("[INFO] Seeded Resources successfully.")
 
-        # 3. Seed Incidents
+        # 4. Realistic Incidents with Status Lifecycle
         if db.query(Incident).count() == 0:
-            now = datetime.utcnow()
             incidents_data = [
                 {
-                    "incident_code": "INC-1001",
-                    "title": "Flash Flooding and River Overflow in Mutha Basin",
-                    "incident_type": "Flood",
-                    "description": "Rising water levels from Khadakwasla discharge caused severe inundation across riverside low-lying residential areas. Several residents stranded on rooftops.",
+                    "tracking_id": "RQ-2026-0001",
+                    "name": "Ramesh Patil",
+                    "contact": "+91 98230 45671",
+                    "emergency_type": "Flood",
+                    "description": "Flash flooding in residential low-lying area near Mutha riverbank. Water level at 4 feet and rising. 4 elderly citizens stranded on second floor balcony.",
+                    "location": "Shivaji Nagar, Pune, Maharashtra",
+                    "latitude": 18.5308,
+                    "longitude": 73.8475,
                     "severity": "Critical",
-                    "people_affected": 75,
-                    "people_needing_assistance": 18,
-                    "latitude": 18.4722,
-                    "longitude": 73.8211,
-                    "location_name": "Sinhagad Road, Vitthalwadi, Pune",
-                    "reporter_name": "Amit Deshmukh (Ward Coordinator)",
-                    "reporter_contact": "+91 94220 89100",
-                    "status": "Response in Progress",
-                    "is_demo": True,
-                    "created_at": now - timedelta(hours=3, minutes=20)
-                },
-                {
-                    "incident_code": "INC-1002",
-                    "title": "Old Commercial Building Structural Wall Partial Collapse",
-                    "incident_type": "Building collapse",
-                    "description": "Continuous heavy precipitation triggered masonry failure on the eastern wing of a 3-storey heritage building. 4 workers trapped in ground floor warehouse.",
-                    "severity": "High",
-                    "people_affected": 20,
-                    "people_needing_assistance": 4,
-                    "latitude": 18.5167,
-                    "longitude": 73.8562,
-                    "location_name": "Budhwar Peth Market Lane, Pune",
-                    "reporter_name": "Rajesh Shinde (Local Trader)",
-                    "reporter_contact": "+91 98230 45678",
+                    "priority": "Urgent",
+                    "affected_count": 4,
+                    "injured_count": 0,
+                    "vulnerable_people": True,
                     "status": "Verified",
-                    "is_demo": True,
-                    "created_at": now - timedelta(hours=2, minutes=10)
+                    "source": "Citizen Report",
+                    "ai_classified": True,
+                    "ai_summary": "Flash flood threat to stranded elderly citizens. Rising floodwaters require motorized boat extraction.",
+                    "ai_confidence": 0.94
                 },
                 {
-                    "incident_code": "INC-1003",
-                    "title": "Ghat Landslide and Boulders Blocking Arterial Highway",
-                    "incident_type": "Landslide",
-                    "description": "Mudslide and loose boulders brought down by rain blocking both lanes. 15 passenger vehicles stranded with elderly travelers.",
+                    "tracking_id": "RQ-2026-0002",
+                    "name": "Aarav Sharma",
+                    "contact": "+91 98112 34567",
+                    "emergency_type": "Waterlogging",
+                    "description": "Severe storm waterlogging blocking main road artery under metro underpass. 3 vehicles stalled, water approaching ambulance corridor.",
+                    "location": "Connaught Place, New Delhi",
+                    "latitude": 28.6315,
+                    "longitude": 77.2167,
                     "severity": "High",
-                    "people_affected": 42,
-                    "people_needing_assistance": 6,
-                    "latitude": 18.3664,
-                    "longitude": 73.7558,
-                    "location_name": "Sinhagad Ghat Section, Km 4",
-                    "reporter_name": "Traffic Patrol Officer Patil",
-                    "reporter_contact": "+91 99210 54321",
-                    "status": "Reported",
-                    "is_demo": True,
-                    "created_at": now - timedelta(hours=1, minutes=15)
+                    "priority": "High",
+                    "affected_count": 12,
+                    "injured_count": 0,
+                    "vulnerable_people": False,
+                    "status": "Under Verification",
+                    "source": "Citizen Report",
+                    "ai_classified": True,
+                    "ai_summary": "Urban waterlogging obstructing emergency vehicular movement.",
+                    "ai_confidence": 0.89
                 },
                 {
-                    "incident_code": "INC-1004",
-                    "title": "Electrical Short Circuit & Chemical Fire at Industrial Unit",
-                    "incident_type": "Fire",
-                    "description": "Flooding caused short-circuit in transformer room spreading to solvent barrels. Dense toxic smoke billowing towards residential quarters.",
-                    "severity": "Critical",
-                    "people_affected": 30,
-                    "people_needing_assistance": 7,
-                    "latitude": 18.5913,
-                    "longitude": 73.7389,
-                    "location_name": "Hinjawadi Phase 1 MIDC, Pune",
-                    "reporter_name": "Factory Security Incharge More",
-                    "reporter_contact": "+91 97650 99881",
-                    "status": "Reported",
-                    "is_demo": True,
-                    "created_at": now - timedelta(minutes=45)
-                },
-                {
-                    "incident_code": "INC-1005",
-                    "title": "Tree Fall & Severe Road Blockage Near Hospital Access",
-                    "incident_type": "Road blockage",
-                    "description": "Large banyan tree uprooted by gale winds blocking main approach road to Aundh Hospital. Ambulances forced to detour.",
+                    "tracking_id": "RQ-2026-0003",
+                    "name": "Sunita Deshmukh",
+                    "contact": "+91 94220 89123",
+                    "emergency_type": "Landslide",
+                    "description": "Debris and rockfall blocking two lanes on highway section after torrential rain. Traffic halted. No known casualties yet but slope looks unstable.",
+                    "location": "Lonavala Ghats, Maharashtra",
+                    "latitude": 18.7557,
+                    "longitude": 73.4091,
                     "severity": "Medium",
-                    "people_affected": 15,
-                    "people_needing_assistance": 0,
-                    "latitude": 18.5580,
-                    "longitude": 73.8075,
-                    "location_name": "Aundh Main DP Road, Pune",
-                    "reporter_name": "Dr. Sneha Joshi",
-                    "reporter_contact": "+91 98500 12345",
+                    "priority": "Standard",
+                    "affected_count": 6,
+                    "injured_count": 0,
+                    "vulnerable_people": False,
+                    "status": "New",
+                    "source": "Citizen Report",
+                    "ai_classified": True,
+                    "ai_summary": "Highway road blockage caused by rockfall. Heavy earthmoving equipment recommended.",
+                    "ai_confidence": 0.91
+                },
+                {
+                    "tracking_id": "RQ-2026-0004",
+                    "name": "Pooja Verma",
+                    "contact": "+91 98765 43210",
+                    "emergency_type": "Immediate SOS Distress",
+                    "description": "Emergency SOS triggered: Building tremor shaking noticed, power cut in apartment building.",
+                    "location": "Sector 62, Noida, Uttar Pradesh",
+                    "latitude": 28.6280,
+                    "longitude": 77.3649,
+                    "severity": "High",
+                    "priority": "High",
+                    "affected_count": 8,
+                    "injured_count": 0,
+                    "vulnerable_people": True,
+                    "status": "Assigned",
+                    "source": "SOS Distress",
+                    "ai_classified": True,
+                    "ai_summary": "Structural tremor distress report. Structural stability team assigned.",
+                    "ai_confidence": 0.87
+                },
+                {
+                    "tracking_id": "RQ-2026-0005",
+                    "name": "Vikram Sen",
+                    "contact": "+91 98301 77654",
+                    "emergency_type": "Cyclone",
+                    "description": "Fallen high-tension tree damaged electrical poles and blocked community center entrance. Power severed in ward.",
+                    "location": "Digha Coastal Belt, West Bengal",
+                    "latitude": 21.6266,
+                    "longitude": 87.5074,
+                    "severity": "High",
+                    "priority": "High",
+                    "affected_count": 25,
+                    "injured_count": 1,
+                    "vulnerable_people": False,
                     "status": "Resolved",
-                    "is_demo": True,
-                    "created_at": now - timedelta(hours=6),
-                    "resolved_at": now - timedelta(hours=1)
+                    "source": "Citizen Report",
+                    "ai_classified": True,
+                    "ai_summary": "Gale-force cyclone damage cleared by municipal emergency clearance crews.",
+                    "ai_confidence": 0.92
                 }
             ]
 
-            for inc in incidents_data:
-                # Calculate risk assessment using engine
-                risk_res = calculate_risk(
-                    incident_type=inc["incident_type"],
-                    severity=inc["severity"],
-                    people_affected=inc["people_affected"],
-                    people_needing_assistance=inc["people_needing_assistance"],
-                    has_coordinates=(inc["latitude"] is not None),
-                    vulnerable_present=True,
-                    environmental_hazard_alert=True
+            for inc_data in incidents_data:
+                inc = Incident(**inc_data)
+                db.add(inc)
+                db.flush()
+
+                # Add update history
+                update1 = IncidentUpdate(
+                    incident_id=inc.id,
+                    previous_status=None,
+                    new_status="New",
+                    notes="Emergency report logged into RESQAI disaster coordination system.",
+                    updated_by="Citizen Submission"
                 )
-                inc_record = Incident(
-                    incident_code=inc["incident_code"],
-                    title=inc["title"],
-                    incident_type=inc["incident_type"],
-                    description=inc["description"],
-                    severity=inc["severity"],
-                    people_affected=inc["people_affected"],
-                    people_needing_assistance=inc["people_needing_assistance"],
-                    latitude=inc["latitude"],
-                    longitude=inc["longitude"],
-                    location_name=inc["location_name"],
-                    reporter_name=inc["reporter_name"],
-                    reporter_contact=inc["reporter_contact"],
-                    status=inc["status"],
-                    risk_score=risk_res["risk_score"],
-                    risk_level=risk_res["risk_level"],
-                    response_priority=risk_res["priority"],
-                    risk_factors=json.dumps(risk_res["factors"]),
-                    risk_limitations=json.dumps(risk_res["limitations"]),
-                    is_demo=True,
-                    created_at=inc["created_at"],
-                    resolved_at=inc.get("resolved_at")
+                db.add(update1)
+
+                if inc.status != "New":
+                    update2 = IncidentUpdate(
+                        incident_id=inc.id,
+                        previous_status="New",
+                        new_status=inc.status,
+                        notes=f"Triage status progressed to {inc.status} by Emergency Operations Center.",
+                        updated_by="Officer Rajesh Mane (NDRF)"
+                    )
+                    db.add(update2)
+
+                # Add risk assessment
+                risk = RiskAssessment(
+                    incident_id=inc.id,
+                    risk_level=inc.severity,
+                    score=85.0 if inc.severity == "Critical" else (65.0 if inc.severity == "High" else 42.0),
+                    hazard_points=35.0,
+                    severity_points=25.0,
+                    assistance_points=15.0,
+                    vulnerable_points=10.0 if inc.vulnerable_people else 0.0,
+                    environmental_points=5.0,
+                    explanation=f"Assessment for {inc.emergency_type} incident at {inc.location}. Prioritized by immediate life-safety peril.",
+                    contributing_factors=json.dumps([f"Hazard type: {inc.emergency_type}", f"Reported severity: {inc.severity}", f"{inc.affected_count} affected persons"]),
+                    recommendations=json.dumps(["Maintain safe perimeter", "Check nearby emergency medical center availability", "Direct evacuees to verified municipal shelter"]),
+                    limitations=json.dumps(["Initial estimate subject to onsite visual inspection"]),
+                    ai_generated=True
                 )
-                db.add(inc_record)
+                db.add(risk)
+
             db.commit()
-            print("[INFO] Seeded Incidents with Risk Assessments successfully.")
 
-            # Assign Boat to Incident INC-1001 as realistic demo state
-            inc_1 = db.query(Incident).filter(Incident.incident_code == "INC-1001").first()
-            res_boat = db.query(Resource).filter(Resource.resource_code == "RES-02").first()
-            if inc_1 and res_boat:
-                inc_1.assigned_resource_id = res_boat.id
-                res_boat.status = "Assigned"
-                res_boat.current_incident_id = inc_1.id
-                assignment = ResourceAssignment(
-                    incident_id=inc_1.id,
-                    resource_id=res_boat.id,
-                    status="Active",
-                    notes="Dispatched for Mutha basin stranded resident evacuation."
-                )
-                db.add(assignment)
-                note = IncidentNote(
-                    incident_id=inc_1.id,
-                    author="Control Officer Kulkarni",
-                    note="Assigned Boat Alpha from Khadakwasla station. ETA 12 minutes."
-                )
-                db.add(note)
-                db.commit()
-
-        # 4. Seed Alerts
-        if db.query(Alert).count() == 0:
-            alerts_data = [
+        # 5. Seed Initial Notifications
+        if db.query(Notification).count() == 0:
+            notifs = [
                 {
-                    "alert_type": "Incident",
-                    "message": "CRITICAL HAZARD: Flash flooding reported in Sinhagad Road, Vitthalwadi (Risk Score: 88).",
-                    "severity": "Critical",
-                    "related_incident_id": 1,
-                    "is_read": False,
-                    "created_at": datetime.utcnow() - timedelta(minutes=40)
+                    "title": "Severe Rain & Waterlogging Advisory",
+                    "message": "Heavy monsoon precipitation forecast in low-lying riverine basins. Citizens are advised to monitor official NDMA channels.",
+                    "type": "alert",
+                    "priority": "high"
                 },
                 {
-                    "alert_type": "Shelter",
-                    "message": "CAPACITY WARNING: Aundh Multipurpose Auditorium is at 91% occupancy (165/180).",
-                    "severity": "High",
-                    "related_incident_id": None,
-                    "is_read": False,
-                    "created_at": datetime.utcnow() - timedelta(minutes=25)
+                    "title": "Seismic Activity Monitor Active",
+                    "message": "USGS GeoJSON live telemetry feed connected. South Asia plate boundaries monitored in real-time.",
+                    "type": "alert",
+                    "priority": "normal"
                 },
                 {
-                    "alert_type": "Weather",
-                    "message": "METEOROLOGICAL ADVISORY: Catchment rainfall intensity exceeds 18mm/h. Dam outflow increased.",
-                    "severity": "High",
-                    "related_incident_id": None,
-                    "is_read": False,
-                    "created_at": datetime.utcnow() - timedelta(minutes=15)
-                },
-                {
-                    "alert_type": "Dispatch",
-                    "message": "DISPATCH CONFIRMED: Rescue Boat Alpha successfully assigned to Mutha Basin Flash Flood.",
-                    "severity": "Medium",
-                    "related_incident_id": 1,
-                    "is_read": True,
-                    "created_at": datetime.utcnow() - timedelta(minutes=10)
+                    "title": "SOS Distress Unit Online",
+                    "message": "Emergency SOS direct-beacon transmitter active. Unified 112 guidance accessible on all terminals.",
+                    "type": "sos",
+                    "priority": "critical"
                 }
             ]
-            for a in alerts_data:
-                db.add(Alert(**a))
+            for n in notifs:
+                db.add(Notification(**n))
             db.commit()
-            print("[INFO] Seeded Alerts successfully.")
 
+        print("[RESQAI-SEED] Seed data successfully verified and populated.")
     except Exception as e:
         db.rollback()
-        print(f"[ERROR] Failed to seed database: {e}")
-        raise e
+        print(f"[RESQAI-SEED-ERR] {e}")
     finally:
         db.close()
-
-
-if __name__ == "__main__":
-    seed_database()

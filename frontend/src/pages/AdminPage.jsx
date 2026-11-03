@@ -14,74 +14,83 @@ import {
   AlertTriangle,
   RefreshCw,
   Eye,
-  FileText
+  FileText,
+  Users,
+  ShieldCheck,
+  Building2,
+  Activity,
+  History,
+  Check
 } from 'lucide-react';
 import { api } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
-export default function AdminPage() {
-  const [token, setToken] = useState(() => sessionStorage.getItem('resqai_admin_token') || '');
-  const [adminUser, setAdminUser] = useState(() => {
-    const saved = sessionStorage.getItem('resqai_admin_user');
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  // Login form state
-  const [email, setEmail] = useState('admin@resqai.in');
-  const [password, setPassword] = useState('ResqAdmin@2026');
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [loginError, setLoginError] = useState(null);
-
-  // Reports state
+export default function AdminPage({ setActivePage }) {
+  const { user, token, isAdmin, login } = useAuth();
+  
+  // Local state
+  const [activeTab, setActiveTab] = useState('incidents'); // 'incidents', 'users', 'audit', 'analytics'
   const [reports, setReports] = useState([]);
-  const [loadingReports, setLoadingReports] = useState(false);
+  const [usersList, setUsersList] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Filters
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [severityFilter, setSeverityFilter] = useState('');
 
-  // Selected report modal for status update
+  // Status Update Modal
   const [selectedReport, setSelectedReport] = useState(null);
-  const [newStatus, setNewStatus] = useState('Acknowledged');
+  const [newStatus, setNewStatus] = useState('Verified');
   const [internalNotes, setInternalNotes] = useState('');
   const [updating, setUpdating] = useState(false);
-  const [updateSuccess, setUpdateSuccess] = useState(null);
 
-  const fetchAdminReports = async () => {
+  // Admin login fallback if not authenticated
+  const [adminEmail, setAdminEmail] = useState('admin@resqai.in');
+  const [adminPassword, setAdminPassword] = useState('ResqAdmin@2026');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState(null);
+
+  const loadAdminData = async () => {
     if (!token) return;
-    setLoadingReports(true);
+    setLoading(true);
     try {
-      const data = await api.getAdminReports(token, {
-        search: search.trim() || undefined,
-        status: statusFilter || undefined,
-        severity: severityFilter || undefined
-      });
-      setReports(data || []);
+      const [reportsData, usersData, auditData, analyticsData] = await Promise.allSettled([
+        api.getAdminReports(token, {
+          search: search.trim() || undefined,
+          status: statusFilter || undefined,
+          severity: severityFilter || undefined
+        }),
+        api.getUsers(token),
+        api.getAuditLogs(token),
+        api.getAnalytics()
+      ]);
+
+      if (reportsData.status === 'fulfilled') setReports(reportsData.value || []);
+      if (usersData.status === 'fulfilled') setUsersList(usersData.value || []);
+      if (auditData.status === 'fulfilled') setAuditLogs(auditData.value || []);
+      if (analyticsData.status === 'fulfilled') setAnalytics(analyticsData.value || null);
     } catch (err) {
       console.error(err);
-      if (err.message.includes('Unauthorized') || err.message.includes('expired')) {
-        handleLogout();
-      }
     } finally {
-      setLoadingReports(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     if (token) {
-      fetchAdminReports();
+      loadAdminData();
     }
   }, [token, statusFilter, severityFilter]);
 
-  const handleLogin = async (e) => {
+  const handleAdminLogin = async (e) => {
     e.preventDefault();
     setLoginLoading(true);
     setLoginError(null);
-
     try {
-      const res = await api.adminLogin(email.trim(), password);
-      setToken(res.access_token);
-      setAdminUser(res.user);
-      sessionStorage.setItem('resqai_admin_token', res.access_token);
-      sessionStorage.setItem('resqai_admin_user', JSON.stringify(res.user));
+      await login(adminEmail, adminPassword);
     } catch (err) {
       setLoginError(err.message || 'Login failed');
     } finally {
@@ -89,313 +98,269 @@ export default function AdminPage() {
     }
   };
 
-  const handleLogout = () => {
-    setToken('');
-    setAdminUser(null);
-    sessionStorage.removeItem('resqai_admin_token');
-    sessionStorage.removeItem('resqai_admin_user');
-  };
-
-  const handleOpenStatusModal = (report) => {
-    setSelectedReport(report);
-    setNewStatus(report.status);
-    setInternalNotes('');
-    setUpdateSuccess(null);
-  };
-
-  const handleUpdateStatus = async (e) => {
+  const handleStatusSubmit = async (e) => {
     e.preventDefault();
     if (!selectedReport) return;
-
     setUpdating(true);
     try {
-      const updated = await api.updateReportStatus(
+      await api.updateIncidentStatus(
         token,
         selectedReport.id,
         newStatus,
-        internalNotes.trim() || `Status updated to ${newStatus}`
+        internalNotes || `Admin status change to ${newStatus}`
       );
-      setUpdateSuccess("Status updated successfully.");
-      setSelectedReport(updated);
-      fetchAdminReports();
+      setSelectedReport(null);
+      loadAdminData();
     } catch (err) {
-      alert(`Update failed: ${err.message}`);
+      alert("Failed to update status: " + err.message);
     } finally {
       setUpdating(false);
     }
   };
 
-  // If not logged in, show Login Screen
-  if (!token) {
+  const handleVerifyUser = async (userId) => {
+    try {
+      await api.verifyUser(token, userId);
+      loadAdminData();
+      alert("User account verified successfully.");
+    } catch (err) {
+      alert("Failed to verify user: " + err.message);
+    }
+  };
+
+  // If not logged in as admin, show clean admin login card
+  if (!token || !isAdmin) {
     return (
-      <div className="max-w-md mx-auto px-4 py-16">
-        <div className="glass-panel p-8 rounded-3xl border-resq-border shadow-2xl space-y-6">
+      <div className="min-h-[75vh] flex items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md space-y-6">
           <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-2xl bg-resq-blue/20 text-resq-cyan flex items-center justify-center mx-auto border border-blue-500/30 shadow-glow-blue">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#5278E8] to-[#A5B4FC] text-white flex items-center justify-center mx-auto shadow-soft">
               <Lock className="w-6 h-6" />
             </div>
-            <h1 className="text-2xl font-extrabold text-white">
-              Control Room Login
-            </h1>
-            <p className="text-xs text-slate-400">
-              Protected authentication for incident response commanders and administrative dispatch personnel.
+            <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+              Control Room Authentication
+            </h2>
+            <p className="text-xs text-pastel-muted">
+              Restricted portal. High-level security authentication required.
             </p>
           </div>
 
-          {loginError && (
-            <div className="p-3.5 rounded-xl bg-red-950/60 border border-red-500/40 text-red-200 text-xs">
-              {loginError}
-            </div>
-          )}
+          <div className="pastel-card p-6 shadow-soft-lg space-y-4">
+            {loginError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">
+                {loginError}
+              </div>
+            )}
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                Officer Email
-              </label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-resq-dark border border-resq-border rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-resq-blue transition"
-              />
-            </div>
+            <form onSubmit={handleAdminLogin} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Officer Email</label>
+                <input
+                  type="email"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  required
+                  className="w-full p-2.5 rounded-xl border border-pastel-border bg-slate-50 text-slate-800"
+                />
+              </div>
 
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                Master Password
-              </label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-resq-dark border border-resq-border rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-resq-blue transition"
-              />
-            </div>
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Security Credential</label>
+                <input
+                  type="password"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  required
+                  className="w-full p-2.5 rounded-xl border border-pastel-border bg-slate-50 text-slate-800"
+                />
+              </div>
 
-            <div className="pt-2">
               <button
                 type="submit"
                 disabled={loginLoading}
-                className="w-full py-3 px-4 rounded-xl bg-resq-blue hover:bg-blue-600 disabled:opacity-50 text-white font-bold text-xs shadow-glow-blue transition active:scale-98"
+                className="w-full py-3 rounded-xl bg-[#5278E8] hover:bg-[#4365D0] disabled:opacity-50 text-white font-bold text-xs shadow-soft transition"
               >
-                {loginLoading ? 'Authenticating Officer...' : 'Access Incident Command'}
+                {loginLoading ? 'Authenticating...' : 'Sign In as Administrator'}
               </button>
-            </div>
-          </form>
-
-          <div className="bg-resq-dark/50 p-3 rounded-xl border border-resq-border/60 text-[11px] text-slate-400">
-            <span className="font-bold text-slate-300 block mb-0.5">Initial Demo Credentials:</span>
-            <span>Email: <code className="text-cyan-300 font-mono">admin@resqai.in</code></span><br />
-            <span>Password: <code className="text-cyan-300 font-mono">ResqAdmin@2026</code></span>
+            </form>
           </div>
         </div>
       </div>
     );
   }
 
-  // Calculate Metrics
-  const criticalCount = reports.filter(r => r.severity === 'Critical').length;
-  const underReviewCount = reports.filter(r => r.status === 'Under Review').length;
-  const acknowledgedCount = reports.filter(r => r.status === 'Acknowledged').length;
-  const resolvedCount = reports.filter(r => r.status === 'Resolved' || r.status === 'Closed').length;
+  const pendingVerificationCount = usersList.filter(u => u.role !== 'citizen' && !u.verified).length;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-resq-border/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-pastel-border">
         <div>
           <div className="flex items-center space-x-2">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Incident Control Room Dashboard
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+              Administrative Control Center
             </h1>
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-              Authenticated
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-[#5278E8] border border-indigo-200">
+              NDMA HIGH-COMMAND
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Logged in as <strong>{adminUser?.name || 'Administrator'}</strong> ({adminUser?.email})
+          <p className="text-xs text-pastel-muted">
+            Global incident governance, responder personnel verification, resource fleet management, and tamper-proof audit trails.
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
           <button
-            onClick={fetchAdminReports}
-            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-resq-card hover:bg-resq-cardLight text-slate-200 border border-resq-border text-xs font-semibold transition"
+            onClick={loadAdminData}
+            className="p-2.5 rounded-xl bg-white border border-pastel-border text-slate-600 hover:text-[#5278E8] shadow-xs transition"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-resq-cyan ${loadingReports ? 'animate-spin' : ''}`} />
-            <span>Refresh Queue</span>
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#5278E8]' : ''}`} />
           </button>
-
           <button
-            onClick={handleLogout}
-            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-red-950/60 hover:bg-red-900/60 text-red-300 border border-red-500/30 text-xs font-semibold transition"
+            onClick={() => setActivePage('analytics')}
+            className="px-4 py-2 rounded-xl bg-[#5278E8] hover:bg-[#4365D0] text-white font-bold text-xs shadow-soft transition"
           >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Sign Out</span>
+            Analytics View
           </button>
         </div>
       </div>
 
-      {/* Overview Metric Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="glass-panel p-4 rounded-2xl border-resq-border">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total SOS Reports</span>
-          <span className="text-2xl font-black text-white mt-1 block">{reports.length}</span>
-          <span className="text-[10px] text-slate-500">Live Database Records</span>
+      {/* 6 Top Metric Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="pastel-card p-4 border-l-4 border-l-blue-500">
+          <span className="text-[10px] font-bold text-slate-400 uppercase">Total Users</span>
+          <div className="text-2xl font-black text-slate-900 mt-0.5">{analytics?.total_registered_users || usersList.length}</div>
         </div>
 
-        <div className="glass-panel-danger p-4 rounded-2xl border-red-500/40">
-          <span className="text-[10px] font-bold text-red-300 uppercase tracking-wider block">Critical Threats</span>
-          <span className="text-2xl font-black text-red-400 mt-1 block">{criticalCount}</span>
-          <span className="text-[10px] text-red-300/80">Immediate Life Risk</span>
+        <div className="pastel-card p-4 border-l-4 border-l-amber-500">
+          <span className="text-[10px] font-bold text-slate-400 uppercase">Active Incidents</span>
+          <div className="text-2xl font-black text-amber-600 mt-0.5">{analytics?.active_incidents || reports.length}</div>
         </div>
 
-        <div className="glass-panel-warning p-4 rounded-2xl border-amber-500/40">
-          <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">Under Triage / Review</span>
-          <span className="text-2xl font-black text-amber-400 mt-1 block">{underReviewCount + acknowledgedCount}</span>
-          <span className="text-[10px] text-amber-300/80">Active Coordination</span>
+        <div className="pastel-card p-4 border-l-4 border-l-rose-500">
+          <span className="text-[10px] font-bold text-slate-400 uppercase">Critical Emergencies</span>
+          <div className="text-2xl font-black text-rose-600 mt-0.5">{analytics?.critical_emergencies || 0}</div>
         </div>
 
-        <div className="glass-panel-success p-4 rounded-2xl border-emerald-500/40">
-          <span className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider block">Resolved / Closed</span>
-          <span className="text-2xl font-black text-emerald-400 mt-1 block">{resolvedCount}</span>
-          <span className="text-[10px] text-emerald-300/80">Incident Cleared</span>
+        <div className="pastel-card p-4 border-l-4 border-l-emerald-500">
+          <span className="text-[10px] font-bold text-slate-400 uppercase">Resolved Cases</span>
+          <div className="text-2xl font-black text-emerald-600 mt-0.5">{analytics?.resolved_incidents || 0}</div>
+        </div>
+
+        <div className="pastel-card p-4 border-l-4 border-l-purple-500">
+          <span className="text-[10px] font-bold text-slate-400 uppercase">Pending Verifications</span>
+          <div className="text-2xl font-black text-purple-700 mt-0.5">{pendingVerificationCount}</div>
+        </div>
+
+        <div className="pastel-card p-4 border-l-4 border-l-sky-500">
+          <span className="text-[10px] font-bold text-slate-400 uppercase">Available Fleet</span>
+          <div className="text-2xl font-black text-sky-700 mt-0.5">{analytics?.available_resources || 7}</div>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="glass-panel p-4 rounded-2xl border-resq-border flex flex-col md:flex-row items-center gap-3">
-        <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && fetchAdminReports()}
-            placeholder="Search by Tracking ID, citizen name, location, or emergency type..."
-            className="w-full bg-resq-dark border border-resq-border rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-resq-blue"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-resq-dark border border-resq-border rounded-xl px-3 py-2 text-xs text-white cursor-pointer"
-          >
-            <option value="">All Statuses</option>
-            <option value="Submitted">Submitted</option>
-            <option value="Under Review">Under Review</option>
-            <option value="Acknowledged">Acknowledged</option>
-            <option value="Resolved">Resolved</option>
-            <option value="Closed">Closed</option>
-          </select>
-
-          <select
-            value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
-            className="bg-resq-dark border border-resq-border rounded-xl px-3 py-2 text-xs text-white cursor-pointer"
-          >
-            <option value="">All Severities</option>
-            <option value="Critical">Critical</option>
-            <option value="High">High</option>
-            <option value="Medium">Medium</option>
-            <option value="Low">Low</option>
-          </select>
-
+      {/* Tabs */}
+      <div className="flex rounded-2xl bg-white p-1 border border-pastel-border shadow-xs text-xs">
+        {[
+          { id: 'incidents', label: `Incident Queue (${reports.length})` },
+          { id: 'users', label: `Personnel & Verifications (${usersList.length})` },
+          { id: 'audit', label: `Audit Log Trail (${auditLogs.length})` }
+        ].map(tab => (
           <button
-            onClick={fetchAdminReports}
-            className="px-4 py-2 rounded-xl bg-resq-blue hover:bg-blue-600 text-white font-bold text-xs shadow-glow-blue transition"
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 py-2.5 rounded-xl font-bold transition ${
+              activeTab === tab.id ? 'bg-[#5278E8] text-white shadow-soft' : 'text-slate-600 hover:text-slate-900'
+            }`}
           >
-            Filter
+            {tab.label}
           </button>
-        </div>
+        ))}
       </div>
 
-      {/* Reports Table */}
-      <div className="glass-panel rounded-2xl border-resq-border overflow-hidden">
-        <div className="p-4 border-b border-resq-border flex items-center justify-between">
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-resq-cyan" />
-            Active Emergency Queue ({reports.length})
-          </h2>
-          <span className="text-xs text-slate-400 font-mono">Confidential View Enabled</span>
-        </div>
+      {/* TAB 1: INCIDENTS MANAGEMENT TABLE */}
+      {activeTab === 'incidents' && (
+        <div className="pastel-card p-6 space-y-4 shadow-soft">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-72">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search ID, reporter, city..."
+                className="w-full pl-9 pr-3 py-2 rounded-xl text-xs bg-slate-50 border border-pastel-border"
+              />
+            </div>
 
-        {loadingReports ? (
-          <div className="py-16 text-center text-slate-400 text-xs">
-            Fetching secure admin report records...
+            <div className="flex items-center space-x-2">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="text-xs p-2 rounded-xl bg-slate-50 border border-pastel-border font-bold text-slate-700"
+              >
+                <option value="">All Statuses</option>
+                {['New', 'Under Verification', 'Verified', 'Assigned', 'Rescue in Progress', 'Resolved', 'Closed'].map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+
+              <select
+                value={severityFilter}
+                onChange={(e) => setSeverityFilter(e.target.value)}
+                className="text-xs p-2 rounded-xl bg-slate-50 border border-pastel-border font-bold text-slate-700"
+              >
+                <option value="">All Severities</option>
+                {['Critical', 'High', 'Medium', 'Low'].map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
           </div>
-        ) : reports.length > 0 ? (
+
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-resq-dark/80 text-slate-400 border-b border-resq-border">
-                  <th className="p-3.5 font-bold uppercase tracking-wider">Tracking ID</th>
-                  <th className="p-3.5 font-bold uppercase tracking-wider">Citizen & Contact</th>
-                  <th className="p-3.5 font-bold uppercase tracking-wider">Emergency Type</th>
-                  <th className="p-3.5 font-bold uppercase tracking-wider">Location</th>
-                  <th className="p-3.5 font-bold uppercase tracking-wider">Severity</th>
-                  <th className="p-3.5 font-bold uppercase tracking-wider">Status</th>
-                  <th className="p-3.5 font-bold uppercase tracking-wider">Timestamp</th>
-                  <th className="p-3.5 font-bold uppercase tracking-wider text-right">Action</th>
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-pastel-border">
+                <tr>
+                  <th className="p-3">Tracking ID</th>
+                  <th className="p-3">Type & Severity</th>
+                  <th className="p-3">Location</th>
+                  <th className="p-3">Citizen Contact</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-resq-border/60">
-                {reports.map((report) => (
-                  <tr key={report.id} className="hover:bg-resq-cardLight/50 transition">
-                    <td className="p-3.5 font-mono font-bold text-cyan-400 whitespace-nowrap">
-                      {report.tracking_id}
-                    </td>
-
-                    <td className="p-3.5 whitespace-nowrap">
-                      <div className="font-semibold text-white">{report.name}</div>
-                      <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1">
-                        <Phone className="w-2.5 h-2.5 text-resq-cyan" />
-                        <a href={`tel:${report.contact}`} className="hover:underline">{report.contact}</a>
-                      </div>
-                    </td>
-
-                    <td className="p-3.5 whitespace-nowrap">
-                      <span className="font-semibold text-slate-200">{report.emergency_type}</span>
-                      <div className="text-[10px] text-slate-500">Affected: {report.affected_count}</div>
-                    </td>
-
-                    <td className="p-3.5 max-w-[200px] truncate text-slate-300">
-                      {report.location}
-                    </td>
-
-                    <td className="p-3.5 whitespace-nowrap">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                        report.severity === 'Critical'
-                          ? 'bg-red-500/20 text-red-400 border-red-500/40'
-                          : report.severity === 'High'
-                          ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
-                          : 'bg-blue-500/20 text-blue-400 border-blue-500/40'
+              <tbody className="divide-y divide-slate-100">
+                {reports.map((r) => (
+                  <tr key={r.id} className="hover:bg-slate-50/80 transition">
+                    <td className="p-3 font-mono font-bold text-[#5278E8]">{r.tracking_id}</td>
+                    <td className="p-3">
+                      <div className="font-bold text-slate-900">{r.emergency_type}</div>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                        r.severity === 'Critical' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-800'
                       }`}>
-                        {report.severity}
+                        {r.severity}
                       </span>
                     </td>
-
-                    <td className="p-3.5 whitespace-nowrap">
-                      <span className="font-semibold text-white bg-resq-dark px-2 py-0.5 rounded border border-resq-border text-[11px]">
-                        {report.status}
+                    <td className="p-3 text-slate-600 max-w-xs truncate">{r.location}</td>
+                    <td className="p-3">
+                      <div className="font-bold text-slate-900">{r.name}</div>
+                      <div className="text-slate-500 text-[11px]">{r.contact}</div>
+                    </td>
+                    <td className="p-3">
+                      <span className="font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px]">
+                        {r.status}
                       </span>
                     </td>
-
-                    <td className="p-3.5 whitespace-nowrap text-[11px] text-slate-400 font-mono">
-                      {new Date(report.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </td>
-
-                    <td className="p-3.5 text-right whitespace-nowrap">
+                    <td className="p-3 text-right">
                       <button
-                        onClick={() => handleOpenStatusModal(report)}
-                        className="px-3 py-1.5 rounded-lg bg-resq-blue hover:bg-blue-600 text-white font-bold text-xs transition"
+                        onClick={() => {
+                          setSelectedReport(r);
+                          setNewStatus(r.status);
+                          setInternalNotes('');
+                        }}
+                        className="px-3 py-1 bg-indigo-50 hover:bg-[#5278E8] hover:text-white text-[#5278E8] font-bold rounded-lg text-xs transition"
                       >
-                        Manage Status
+                        Update
                       </button>
                     </td>
                   </tr>
@@ -403,132 +368,157 @@ export default function AdminPage() {
               </tbody>
             </table>
           </div>
-        ) : (
-          <div className="py-16 text-center text-slate-400 text-xs">
-            No incident reports found matching filter parameters.
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Status Update & Detail Modal */}
-      {selectedReport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-          <div className="glass-panel p-6 sm:p-8 rounded-3xl border-resq-border w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-6 shadow-2xl">
-            <div className="flex items-start justify-between pb-4 border-b border-resq-border">
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-xl font-bold text-white font-mono text-cyan-400">
-                    {selectedReport.tracking_id}
-                  </span>
-                  <span className="px-2 py-0.5 rounded text-xs font-bold bg-resq-dark text-slate-300 border border-resq-border">
-                    {selectedReport.emergency_type}
-                  </span>
+      {/* TAB 2: USER MANAGEMENT & VERIFICATION */}
+      {activeTab === 'users' && (
+        <div className="pastel-card p-6 space-y-4 shadow-soft">
+          <div className="flex items-center justify-between pb-3 border-b border-pastel-border">
+            <h3 className="font-extrabold text-slate-900 text-sm">Registered Personnel Directory</h3>
+            <span className="text-xs font-bold text-slate-500">
+              Pending Authorization: <strong className="text-purple-700">{pendingVerificationCount}</strong>
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-pastel-border">
+                <tr>
+                  <th className="p-3">User</th>
+                  <th className="p-3">Email & Phone</th>
+                  <th className="p-3">Assigned Role</th>
+                  <th className="p-3">Agency Affiliation</th>
+                  <th className="p-3">Verification Status</th>
+                  <th className="p-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {usersList.map((u) => (
+                  <tr key={u.id} className="hover:bg-slate-50/80 transition">
+                    <td className="p-3 font-bold text-slate-900">{u.name}</td>
+                    <td className="p-3 text-slate-600">
+                      <div>{u.email}</div>
+                      <div className="text-[11px] text-slate-400">{u.phone || 'No phone'}</div>
+                    </td>
+                    <td className="p-3">
+                      <span className="px-2 py-0.5 rounded-full font-bold uppercase text-[10px] bg-indigo-50 text-[#5278E8]">
+                        {u.role}
+                      </span>
+                    </td>
+                    <td className="p-3 text-slate-600">{u.agency || 'Public Citizen'}</td>
+                    <td className="p-3">
+                      {u.verified ? (
+                        <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                          ✓ Verified
+                        </span>
+                      ) : (
+                        <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                          ⏳ Pending Approval
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3 text-right">
+                      {!u.verified && u.role !== 'citizen' && (
+                        <button
+                          onClick={() => handleVerifyUser(u.id)}
+                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition"
+                        >
+                          Approve Credential
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: AUDIT LOGS TRAIL */}
+      {activeTab === 'audit' && (
+        <div className="pastel-card p-6 space-y-4 shadow-soft">
+          <div className="flex items-center justify-between pb-3 border-b border-pastel-border">
+            <h3 className="font-extrabold text-slate-900 text-sm">Security & Operational Audit Log Trail</h3>
+            <span className="text-[10px] text-slate-400">Immutable chronological records</span>
+          </div>
+
+          <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+            {auditLogs.map((log) => (
+              <div key={log.id} className="p-3 rounded-xl bg-slate-50 border border-pastel-border text-xs space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-[#5278E8]">{log.action}</span>
+                  <span className="text-[10px] text-slate-400">{log.created_at?.slice(0, 19).replace('T', ' ')} UTC</span>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  Reported by: <strong className="text-white">{selectedReport.name}</strong> ({selectedReport.contact})
-                </p>
+                <p className="text-slate-700 font-medium">{log.details}</p>
+                <div className="text-[10px] text-slate-400 flex items-center space-x-2">
+                  <span>Actor: {log.user_name || 'System / Citizen'}</span>
+                  <span>• Target: {log.target_type} (#{log.target_id})</span>
+                </div>
+              </div>
+            ))}
+
+            {auditLogs.length === 0 && (
+              <div className="p-8 text-center text-xs text-slate-400">
+                No audit events recorded yet.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Status Update */}
+      {selectedReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
+          <form onSubmit={handleStatusSubmit} className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-4 shadow-soft-lg border border-pastel-border">
+            <h3 className="font-extrabold text-slate-900 text-base">
+              Update Incident #{selectedReport.tracking_id}
+            </h3>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Select Triage Status</label>
+                <select
+                  value={newStatus}
+                  onChange={(e) => setNewStatus(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-pastel-border bg-slate-50 text-slate-800 font-bold"
+                >
+                  {['New', 'Under Verification', 'Verified', 'Assigned', 'Rescue in Progress', 'Resolved', 'Closed'].map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
               </div>
 
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Administrative Note / Rationale</label>
+                <textarea
+                  value={internalNotes}
+                  onChange={(e) => setInternalNotes(e.target.value)}
+                  placeholder="Reason for change, resource assignment, or resolution notes..."
+                  rows={3}
+                  className="w-full p-2.5 rounded-xl border border-pastel-border bg-slate-50 text-slate-800"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2">
               <button
+                type="button"
                 onClick={() => setSelectedReport(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
               >
-                ✕
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={updating}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-[#5278E8] text-white shadow-soft"
+              >
+                {updating ? 'Saving...' : 'Confirm Update'}
               </button>
             </div>
-
-            {updateSuccess && (
-              <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>{updateSuccess}</span>
-              </div>
-            )}
-
-            {/* Incident Details Summary */}
-            <div className="bg-resq-dark/80 p-4 rounded-xl border border-resq-border space-y-2 text-xs text-slate-300">
-              <div>Location: <strong className="text-white">{selectedReport.location}</strong></div>
-              <div>People Affected: <strong className="text-white">{selectedReport.affected_count}</strong></div>
-              <div>Description: <p className="text-white mt-1 leading-relaxed bg-resq-card p-2.5 rounded-lg border border-resq-border">{selectedReport.description}</p></div>
-            </div>
-
-            {/* Update Form */}
-            <form onSubmit={handleUpdateStatus} className="space-y-4">
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <Edit3 className="w-3.5 h-3.5 text-resq-cyan" />
-                Update Operational Status
-              </h4>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1">
-                    Select New Status
-                  </label>
-                  <select
-                    value={newStatus}
-                    onChange={(e) => setNewStatus(e.target.value)}
-                    className="w-full bg-resq-dark border border-resq-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-resq-blue cursor-pointer"
-                  >
-                    <option value="Submitted">Submitted (Initial)</option>
-                    <option value="Under Review">Under Review (Assessing)</option>
-                    <option value="Acknowledged">Acknowledged (Dispatched / Alerted)</option>
-                    <option value="Resolved">Resolved (Assistance Delivered)</option>
-                    <option value="Closed">Closed (Completed)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1">
-                    Responder Notes / Public Update
-                  </label>
-                  <input
-                    type="text"
-                    value={internalNotes}
-                    onChange={(e) => setInternalNotes(e.target.value)}
-                    placeholder="e.g. Unit 4 dispatched; water levels subsiding."
-                    className="w-full bg-resq-dark border border-resq-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-resq-blue"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedReport(null)}
-                  className="px-4 py-2 rounded-xl bg-resq-dark text-slate-300 hover:text-white border border-resq-border text-xs"
-                >
-                  Close
-                </button>
-                <button
-                  type="submit"
-                  disabled={updating}
-                  className="px-5 py-2 rounded-xl bg-resq-blue hover:bg-blue-600 disabled:opacity-50 text-white font-bold text-xs shadow-glow-blue transition"
-                >
-                  {updating ? 'Saving...' : 'Update & Log Audit Entry'}
-                </button>
-              </div>
-            </form>
-
-            {/* Audit History Log */}
-            {selectedReport.history && selectedReport.history.length > 0 && (
-              <div className="space-y-2 pt-2 border-t border-resq-border">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                  Status History Trail
-                </span>
-                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                  {selectedReport.history.map((h) => (
-                    <div key={h.id} className="p-2.5 rounded-lg bg-resq-dark/50 border border-resq-border text-xs">
-                      <div className="flex justify-between text-slate-400 text-[10px]">
-                        <span>{h.updated_by}</span>
-                        <span>{new Date(h.updated_at).toLocaleString()}</span>
-                      </div>
-                      <div className="text-white font-semibold mt-0.5">Status: {h.new_status}</div>
-                      {h.notes && <div className="text-slate-300 text-[11px] mt-0.5">{h.notes}</div>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          </form>
         </div>
       )}
     </div>

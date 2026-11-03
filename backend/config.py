@@ -21,8 +21,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440
 
 # AI Assistant - Nugen AI
 NUGEN_API_KEY = os.getenv("NUGEN_API_KEY", "")
-NUGEN_MODEL_ID = os.getenv("NUGEN_MODEL_ID", "")
-NUGEN_API_URL = os.getenv("NUGEN_API_URL", "https://api.nugen.in/api/v3/inference/chat/completions")
+NUGEN_MODEL_ID = os.getenv("NUGEN_MODEL", os.getenv("NUGEN_MODEL_ID", ""))
+NUGEN_API_URL = os.getenv("NUGEN_BASE_URL", os.getenv("NUGEN_API_URL", "https://api.nugen.in/api/v3/inference/chat/completions"))
 
 # NASA FIRMS (Satellite fire hotspots)
 NASA_FIRMS_MAP_KEY = os.getenv("NASA_FIRMS_MAP_KEY", "")
