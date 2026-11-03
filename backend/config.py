@@ -27,6 +27,9 @@ NUGEN_API_URL = os.getenv("NUGEN_BASE_URL", os.getenv("NUGEN_API_URL", "https://
 # NASA FIRMS (Satellite fire hotspots)
 NASA_FIRMS_MAP_KEY = os.getenv("NASA_FIRMS_MAP_KEY", "")
 
+# Location & Geocoding API Key (Google Maps Platform, LocationIQ, OpenCage, etc.)
+LOCATION_API_KEY = os.getenv("LOCATION_API_KEY", os.getenv("GOOGLE_MAPS_API_KEY", os.getenv("VITE_LOCATION_API_KEY", "")))
+
 # Default Admin Seed Credentials (if no admin exists in fresh DB)
 INITIAL_ADMIN_EMAIL = os.getenv("INITIAL_ADMIN_EMAIL", "admin@resqai.in")
 INITIAL_ADMIN_PASSWORD = os.getenv("INITIAL_ADMIN_PASSWORD", "ResqAdmin@2026")
