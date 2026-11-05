@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import L from 'leaflet';
 import { 
   Activity, 
   CloudRain, 
@@ -93,6 +94,150 @@ export default function DashboardPage({ setActivePage }) {
   const [locationError, setLocationError] = useState(null);
   const [locationSearchInput, setLocationSearchInput] = useState('');
   const [locationSearching, setLocationSearching] = useState(false);
+
+  // Live Embedded Dashboard Map Refs
+  const dashboardMapContainerRef = useRef(null);
+  const dashboardMapInstanceRef = useRef(null);
+  const dashboardMarkersLayerRef = useRef(null);
+
+  // Initialize Embedded Dashboard Map with OpenStreetMap
+  useEffect(() => {
+    if (!dashboardMapContainerRef.current) return;
+
+    if (!dashboardMapInstanceRef.current) {
+      const map = L.map(dashboardMapContainerRef.current, {
+        center: [20.5937, 78.9629],
+        zoom: 5,
+        minZoom: 3,
+        maxZoom: 18,
+      });
+
+      // Free OpenStreetMap Standard Tiles - No API key or watermark
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
+        maxZoom: 19
+      }).addTo(map);
+
+      dashboardMarkersLayerRef.current = L.layerGroup().addTo(map);
+      dashboardMapInstanceRef.current = map;
+
+      // Invalidate size to ensure full tile rendering
+      setTimeout(() => {
+        if (dashboardMapInstanceRef.current) {
+          dashboardMapInstanceRef.current.invalidateSize();
+        }
+      }, 300);
+    }
+
+    const handleResize = () => {
+      if (dashboardMapInstanceRef.current) {
+        dashboardMapInstanceRef.current.invalidateSize();
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  // Update Map Markers on Data Refresh
+  useEffect(() => {
+    if (!dashboardMapInstanceRef.current || !dashboardMarkersLayerRef.current) return;
+    const layer = dashboardMarkersLayerRef.current;
+    layer.clearLayers();
+
+    // 1. Plot Incidents
+    citizenReports.forEach(inc => {
+      if (!inc.latitude || !inc.longitude) return;
+      let markerColor = '#EF4444';
+      if (inc.severity === 'High') markerColor = '#F59E0B';
+      else if (inc.severity === 'Medium') markerColor = '#EAB308';
+      else if (inc.severity === 'Low') markerColor = '#3B82F6';
+
+      const customIcon = L.divIcon({
+        className: 'dashboard-incident-pin',
+        html: `
+          <div style="background-color: ${markerColor}; width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid #FFFFFF; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; cursor: pointer;">
+            <div style="background-color: #FFFFFF; width: 6px; height: 6px; border-radius: 50%;"></div>
+          </div>
+        `,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+      });
+
+      const marker = L.marker([inc.latitude, inc.longitude], { icon: customIcon });
+      marker.bindPopup(`
+        <div style="font-family: inherit; font-size: 12px; padding: 4px; max-width: 210px;">
+          <div style="font-weight: 800; color: #0F172A; font-size: 13px;">${inc.emergency_type}</div>
+          <div style="color: #64748B; font-size: 11px; margin-top: 1px;">${inc.location || 'Reported Location'}</div>
+          <div style="margin-top: 6px; display: inline-block; padding: 2px 7px; border-radius: 6px; font-weight: 700; font-size: 10px; background-color: ${markerColor}20; color: ${markerColor}; border: 1px solid ${markerColor}40;">
+            ${inc.severity} Severity • ${inc.status || 'Active'}
+          </div>
+          ${inc.description ? `<p style="margin-top: 6px; color: #334155; font-size: 11px; line-height: 1.3;">${inc.description.slice(0, 100)}${inc.description.length > 100 ? '...' : ''}</p>` : ''}
+          <div style="margin-top: 6px; font-size: 10px; color: #94A3B8;">Tracking: ${inc.tracking_id || 'RQ-ID'}</div>
+        </div>
+      `);
+      layer.addLayer(marker);
+    });
+
+    // 2. Plot Earthquakes
+    earthquakes.forEach(eq => {
+      if (!eq.latitude || !eq.longitude) return;
+      const mag = eq.magnitude || 0;
+      let color = '#EAB308';
+      if (mag >= 6.0) color = '#EF4444';
+      else if (mag >= 4.5) color = '#F59E0B';
+
+      const radius = Math.max(6, Math.min(20, mag * 3));
+      const circle = L.circleMarker([eq.latitude, eq.longitude], {
+        radius: radius,
+        fillColor: color,
+        color: '#FFFFFF',
+        weight: 2,
+        opacity: 0.9,
+        fillOpacity: 0.7
+      });
+      circle.bindPopup(`
+        <div style="font-family: inherit; font-size: 12px; padding: 4px; max-width: 210px;">
+          <div style="font-weight: 800; color: #0F172A; font-size: 13px;">Earthquake M${mag.toFixed(1)}</div>
+          <div style="color: #64748B; font-size: 11px; margin-top: 1px;">${eq.place}</div>
+          <div style="color: #475569; font-size: 11px; margin-top: 4px;">Depth: ${eq.depth_km} km</div>
+          <div style="margin-top: 4px; font-size: 10px; color: #059669; font-weight: 600;">Verified USGS Seismic Data</div>
+        </div>
+      `);
+      layer.addLayer(circle);
+    });
+
+    // 3. Plot User Detected Location
+    if (detectedLocation && detectedLocation.latitude && detectedLocation.longitude) {
+      const userIcon = L.divIcon({
+        className: 'dashboard-user-pin',
+        html: `
+          <div style="background-color: #38BDF8; width: 26px; height: 26px; border-radius: 50%; border: 3px solid #FFFFFF; box-shadow: 0 0 16px rgba(56, 189, 248, 0.9); display: flex; align-items: center; justify-content: center;">
+            <div style="background-color: #0284C7; width: 8px; height: 8px; border-radius: 50%;"></div>
+          </div>
+        `,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
+      });
+      const userMarker = L.marker([detectedLocation.latitude, detectedLocation.longitude], { icon: userIcon });
+      userMarker.bindPopup(`
+        <div style="font-family: inherit; font-size: 12px; padding: 4px;">
+          <div style="font-weight: 800; color: #0284C7;">📍 Your Detected Position</div>
+          <div style="color: #475569; font-size: 11px; margin-top: 2px;">${detectedLocation.address || 'Device GPS'}</div>
+        </div>
+      `);
+      layer.addLayer(userMarker);
+    }
+  }, [citizenReports, earthquakes, detectedLocation]);
+
+  // Fly to user coordinates on detection
+  useEffect(() => {
+    if (detectedLocation && dashboardMapInstanceRef.current) {
+      dashboardMapInstanceRef.current.flyTo([detectedLocation.latitude, detectedLocation.longitude], 12);
+    }
+  }, [detectedLocation]);
 
   // Load weather by city or coords
   const loadWeather = async (city) => {
@@ -642,6 +787,102 @@ export default function DashboardPage({ setActivePage }) {
           <div className="text-[11px] text-slate-500 mt-1">
             GPS distress transmissions
           </div>
+        </div>
+      </div>
+
+      {/* 4.5. LIVE GEOSPATIAL DISASTER MAP (LEAFLET + OPENSTREETMAP) */}
+      <div className="pastel-card p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-pastel-border">
+          <div className="space-y-1">
+            <div className="flex items-center space-x-2">
+              <MapPin className="w-5 h-5 text-[#5278E8]" />
+              <h3 className="font-bold text-slate-900 text-sm sm:text-base">
+                Live Geospatial Emergency Map
+              </h3>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                OpenStreetMap Real-Time
+              </span>
+            </div>
+            <p className="text-xs text-slate-500">
+              Interactive map displaying live citizen emergency reports, USGS seismic epicenters, and your detected location.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {detectedLocation ? (
+              <button
+                onClick={() => {
+                  if (dashboardMapInstanceRef.current) {
+                    dashboardMapInstanceRef.current.flyTo([detectedLocation.latitude, detectedLocation.longitude], 12);
+                  }
+                }}
+                className="text-xs font-bold px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 flex items-center space-x-1.5 transition"
+              >
+                <Compass className="w-3.5 h-3.5" />
+                <span>My Location</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleDetectLocation}
+                disabled={locating}
+                className="text-xs font-bold px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 flex items-center space-x-1.5 transition"
+              >
+                <Navigation className={`w-3.5 h-3.5 ${locating ? 'animate-spin' : ''}`} />
+                <span>{locating ? 'Detecting...' : 'Pin My Location'}</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                if (dashboardMapInstanceRef.current) {
+                  dashboardMapInstanceRef.current.flyTo([20.5937, 78.9629], 5);
+                }
+              }}
+              className="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition"
+            >
+              Reset View
+            </button>
+
+            <button
+              onClick={() => setActivePage('map')}
+              className="text-xs font-bold px-3 py-1.5 rounded-xl bg-[#5278E8] text-white hover:bg-[#4365D0] shadow-soft flex items-center space-x-1.5 transition hover:scale-105"
+            >
+              <span>Full Command Map</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Leaflet Map Canvas */}
+        <div 
+          ref={dashboardMapContainerRef} 
+          className="w-full h-80 sm:h-96 rounded-2xl border border-pastel-border overflow-hidden relative z-0 shadow-inner"
+        />
+
+        {/* Quick Map Legend & Attribution */}
+        <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-600 pt-1">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-bold text-slate-400 uppercase text-[10px]">Map Legend:</span>
+            <div className="flex items-center space-x-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]"></span>
+              <span>Critical Incidents</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]"></span>
+              <span>High / Medium Incidents</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#EAB308]"></span>
+              <span>USGS Earthquakes</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#38BDF8]"></span>
+              <span>My Detected GPS</span>
+            </div>
+          </div>
+          <span className="text-[10px] text-slate-400">
+            Click any pin for emergency details • OpenStreetMap contributors
+          </span>
         </div>
       </div>
 

@@ -160,9 +160,14 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
         center: [lat, lng],
         zoom: 13
       });
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
+        maxZoom: 19
       }).addTo(map);
+
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 200);
 
       const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
       marker.on('dragend', async () => {

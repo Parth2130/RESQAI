@@ -31,12 +31,35 @@ const INDIA_PRESETS = [
   { name: 'Himalayan Belt', coords: [31.5, 78.0], zoom: 7 },
 ];
 
+const TILE_LAYERS = {
+  osm: {
+    name: 'Standard OSM',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
+    maxZoom: 19
+  },
+  hot: {
+    name: 'Humanitarian (HOT)',
+    url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors, Humanitarian OpenStreetMap Team',
+    maxZoom: 19
+  },
+  topo: {
+    name: 'Topographic Terrain',
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>, SRTM | <a href="https://opentopomap.org" target="_blank" rel="noopener noreferrer">OpenTopoMap</a>',
+    maxZoom: 17
+  }
+};
+
 export default function MapPage() {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersLayerRef = useRef(null);
   const routeLayerRef = useRef(null);
+  const tileLayerRef = useRef(null);
 
+  const [activeBaseLayer, setActiveBaseLayer] = useState('osm');
   const [earthquakes, setEarthquakes] = useState([]);
   const [incidents, setIncidents] = useState([]);
   const [resources, setResources] = useState([]);
@@ -65,29 +88,62 @@ export default function MapPage() {
     if (!mapContainerRef.current) return;
 
     if (!mapInstanceRef.current) {
-      // Soft light pastel map with CartoDB Positron tiles
+      // 100% Free OpenStreetMap tiles - No API keys or watermarks required
       const map = L.map(mapContainerRef.current, {
         center: [20.5937, 78.9629],
         zoom: 5,
         minZoom: 3,
-        maxZoom: 18,
+        maxZoom: 19,
       });
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 19
+      const selected = TILE_LAYERS[activeBaseLayer] || TILE_LAYERS.osm;
+      const baseLayer = L.tileLayer(selected.url, {
+        attribution: selected.attribution,
+        maxZoom: selected.maxZoom,
       }).addTo(map);
+      tileLayerRef.current = baseLayer;
 
       markersLayerRef.current = L.layerGroup().addTo(map);
       routeLayerRef.current = L.layerGroup().addTo(map);
       mapInstanceRef.current = map;
+
+      // Ensure full tile rendering without blank spots
+      setTimeout(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize();
+        }
+      }, 250);
     }
 
+    const handleResize = () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
     return () => {
-      // Keep map reference across re-renders
+      window.removeEventListener('resize', handleResize);
     };
   }, []);
+
+  // Handle Base Layer Switch
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+    const selected = TILE_LAYERS[activeBaseLayer] || TILE_LAYERS.osm;
+
+    if (tileLayerRef.current) {
+      map.removeLayer(tileLayerRef.current);
+    }
+
+    const newBase = L.tileLayer(selected.url, {
+      attribution: selected.attribution,
+      maxZoom: selected.maxZoom,
+    }).addTo(map);
+    tileLayerRef.current = newBase;
+    newBase.bringToBack();
+  }, [activeBaseLayer]);
 
   // Fetch Data
   const fetchData = async () => {
@@ -344,7 +400,7 @@ export default function MapPage() {
               Interactive Disaster Map
             </h1>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              OPENSTREETMAP / POSITRON
+              OPENSTREETMAP LIVE
             </span>
           </div>
           <p className="text-xs text-pastel-muted">
@@ -414,6 +470,24 @@ export default function MapPage() {
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
             <span>Resources ({resources.length})</span>
           </button>
+        </div>
+
+        {/* Base Map Style Selector */}
+        <div className="flex items-center space-x-1.5 border-t sm:border-t-0 sm:border-l border-slate-200 pt-2 sm:pt-0 sm:pl-3">
+          <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px]">Style:</span>
+          {Object.entries(TILE_LAYERS).map(([key, layer]) => (
+            <button
+              key={key}
+              onClick={() => setActiveBaseLayer(key)}
+              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition ${
+                activeBaseLayer === key
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {layer.name}
+            </button>
+          ))}
         </div>
 
         {/* Color Legend (Mandatory Marker Palette) */}
