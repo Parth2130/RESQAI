@@ -12,7 +12,6 @@ frontend_static_backup/
 
 # Node
 node_modules/
-dist/
 dist-ssr/
 *.local
 
