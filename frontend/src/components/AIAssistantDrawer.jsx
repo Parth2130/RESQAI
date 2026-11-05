@@ -60,7 +60,7 @@ export default function AIAssistantDrawer({ isOpen, onClose }) {
         ...prev, 
         { 
           role: 'assistant', 
-          content: res.response,
+          content: res.response || res.reply || 'Response received from assistant.',
           grounding: res.grounding,
           provider: res.provider
         }
@@ -80,9 +80,11 @@ export default function AIAssistantDrawer({ isOpen, onClose }) {
 
   const sampleQuestions = [
     { en: "What should I do during an earthquake?", hi: "भूकंप के दौरान क्या करना चाहिए?", mr: "भूकंपाच्या वेळी काय करावे?" },
-    { en: "How to prepare a 72-hour disaster Go-Bag?", hi: "72 घंटे का आपदा बैग कैसे तैयार करें?", mr: "72 तासांची आपत्ती बॅग कशी तयार करावी?" },
-    { en: "Safety precautions during a flash flood?", hi: "अचानक बाढ़ के दौरान सुरक्षा सावधानियां?", mr: "अचानक आलेल्या पुरादरम्यान सुरक्षिततेचे उपाय?" },
-    { en: "How to treat severe burn wounds?", hi: "गंभीर जलने की चोटों का प्राथमिक उपचार?", mr: "भाजल्यास प्रथमोपचार कसा करावा?" }
+    { en: "How can I stay safe during floods?", hi: "बाढ़ के दौरान मैं कैसे सुरक्षित रह सकता हूँ?", mr: "पुराच्या वेळी सुरक्षित कसे राहावे?" },
+    { en: "What precautions should I take during a cyclone?", hi: "चक्रवात के दौरान क्या सावधानियां बरतनी चाहिए?", mr: "चक्रीवादळाच्या वेळी कोणती खबरदारी घ्यावी?" },
+    { en: "How do I prepare an emergency kit?", hi: "72 घंटे का आपदा बैग कैसे तैयार करें?", mr: "72 तासांची आपत्ती बॅग कशी तयार करावी?" },
+    { en: "What should I do during extreme rainfall?", hi: "अत्यधिक बारिश के दौरान क्या करना चाहिए?", mr: "मुसळधार पावसाच्या वेळी काय करावे?" },
+    { en: "How can I protect myself during a heatwave?", hi: "लू (हीटवेव) से खुद को कैसे बचाएं?", mr: "उष्णतेच्या लाटेपासून स्वतःचे रक्षण कसे करावे?" }
   ];
 
   if (!isOpen) return null;

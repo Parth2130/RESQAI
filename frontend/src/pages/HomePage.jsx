@@ -65,18 +65,18 @@ export default function HomePage({ setActivePage, onOpenAssistant }) {
 
               {/* Main Heading */}
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight leading-[1.15]">
-                Intelligent Emergency Management. <br />
+                When Every Second Matters, <br />
                 <span className="bg-gradient-to-r from-[#5278E8] via-[#7E9DF2] to-[#38BDF8] bg-clip-text text-transparent">
-                  Faster Rescue. Safer Communities.
+                  Intelligence Matters.
                 </span>
               </h1>
 
               {/* Subheading */}
               <p className="text-base sm:text-lg text-pastel-muted max-w-2xl mx-auto lg:mx-0 leading-relaxed font-normal">
-                ResQAI combines artificial intelligence, real-time disaster information and intelligent emergency coordination to help communities respond faster when every second matters.
+                An intelligent emergency management platform connecting real-time disaster information, location awareness and AI-powered preparedness guidance.
               </p>
 
-              {/* Two Mandatory CTAs */}
+              {/* Mandatory Hero CTAs */}
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2">
                 <button
                   onClick={() => setActivePage('dashboard')}
@@ -91,7 +91,15 @@ export default function HomePage({ setActivePage, onOpenAssistant }) {
                   className="flex items-center space-x-2 px-6 py-3.5 rounded-2xl bg-white hover:bg-rose-50 text-rose-600 font-bold text-sm border border-rose-200 shadow-sm transition-all hover:scale-105 active:scale-95"
                 >
                   <AlertCircle className="w-4 h-4 text-rose-500" />
-                  <span>Report Emergency</span>
+                  <span>Report an Emergency</span>
+                </button>
+
+                <button
+                  onClick={onOpenAssistant}
+                  className="flex items-center space-x-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-sky-50 to-indigo-50 hover:from-sky-100 hover:to-indigo-100 text-indigo-700 font-bold text-sm border border-indigo-200 shadow-sm transition-all hover:scale-105 active:scale-95"
+                >
+                  <Sparkles className="w-4 h-4 text-indigo-500" />
+                  <span>Ask AI Assistant</span>
                 </button>
 
                 <button

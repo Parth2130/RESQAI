@@ -27,23 +27,20 @@ export default function Navbar({ activePage, setActivePage, onOpenAssistant }) {
 
   const navItems = [
     { id: 'home', label: 'Home', icon: ShieldAlert },
-    { id: 'dashboard', label: 'Citizen Portal', icon: Activity },
+    { id: 'dashboard', label: 'Live Dashboard', icon: Activity },
     { id: 'map', label: 'Disaster Map', icon: MapPin },
     { id: 'report', label: 'Report Emergency', icon: AlertCircle, highlight: true },
     { id: 'sos', label: 'SOS Distress', icon: Radio, sosHighlight: true },
     { id: 'ai-assistant', label: 'AI Assistant', icon: Bot },
-    { id: 'safety', label: 'Safety Center', icon: BookOpen },
-    { id: 'resources', label: 'Resources', icon: PhoneForwarded },
+    { id: 'safety', label: 'Safety Guide', icon: BookOpen },
+    { id: 'resources', label: 'Emergency Resources', icon: PhoneForwarded },
+    { id: 'admin', label: isAdmin ? 'Admin Control' : 'Admin Login', icon: Lock, badge: isAdmin ? 'ADMIN' : undefined },
     { id: 'track', label: 'Track Incident', icon: Search },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   ];
 
-  if (isResponder) {
+  if (isResponder && !isAdmin) {
     navItems.push({ id: 'responder', label: 'Responder Control', icon: Radio, badge: 'OPS' });
-  }
-
-  if (isAdmin) {
-    navItems.push({ id: 'admin', label: 'Admin Dashboard', icon: Lock, badge: 'ADMIN' });
   }
 
   const handleNavClick = (id) => {
@@ -81,7 +78,7 @@ export default function Navbar({ activePage, setActivePage, onOpenAssistant }) {
 
           {/* Desktop Navigation Links */}
           <nav className="hidden xl:flex items-center space-x-1">
-            {navItems.slice(0, 7).map((item) => {
+            {navItems.slice(0, 9).map((item) => {
               const Icon = item.icon;
               const isActive = activePage === item.id;
               
@@ -106,10 +103,10 @@ export default function Navbar({ activePage, setActivePage, onOpenAssistant }) {
                   <button
                     key={item.id}
                     onClick={() => handleNavClick(item.id)}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#5278E8] hover:bg-[#4365D0] text-white shadow-soft transition-all hover:scale-105 active:scale-95"
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-soft transition-all hover:scale-105 active:scale-95"
                   >
                     <Icon className="w-3.5 h-3.5 text-white" />
-                    <span>Report Incident</span>
+                    <span>Report Emergency</span>
                   </button>
                 );
               }
@@ -147,7 +144,7 @@ export default function Navbar({ activePage, setActivePage, onOpenAssistant }) {
 
               {userDropdownOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-white border border-pastel-border rounded-2xl shadow-soft-lg py-2 z-50 animate-fadeIn">
-                  {navItems.slice(7).map((item) => {
+                  {navItems.slice(9).map((item) => {
                     const Icon = item.icon;
                     return (
                       <button

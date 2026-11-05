@@ -1,7 +1,8 @@
 """
 RESQAI Location & Geocoding Service
-Provides coordinates resolution, reverse geocoding, address lookup, and location validation.
-Supports Google Maps Platform Geocoding API, LocationIQ, OpenStreetMap Nominatim, and offline gazetteer.
+Provides GPS coordinate resolution, OpenStreetMap Nominatim reverse geocoding,
+location search, and local gazetteer fallback.
+Fully compliant with Nominatim Usage Policy (User-Agent header, attribution).
 """
 from typing import Dict, Any, Optional, List
 import requests
@@ -20,110 +21,180 @@ PUNE_LANDMARKS = {
     "Pimpri Chinchwad": {"lat": 18.6279, "lng": 73.8009}
 }
 
+NOMINATIM_HEADERS = {
+    "User-Agent": "RESQAI-DisasterEmergencyPlatform/2.0 (resqai-support@resqai.in)"
+}
+
 def get_location_api_key() -> str:
     return os.getenv("LOCATION_API_KEY") or os.getenv("GOOGLE_MAPS_API_KEY") or os.getenv("VITE_LOCATION_API_KEY") or ""
 
-def reverse_geocode(lat: float, lng: float) -> str:
+def reverse_geocode_detailed(lat: float, lng: float) -> Dict[str, Any]:
     """
-    Reverse geocodes (lat, lng) coordinates to human-readable address.
-    1. Uses Google Maps Platform Geocoding if LOCATION_API_KEY starts with AIza
-    2. Uses LocationIQ / Geoapify if other API key is set
-    3. Falls back to OpenStreetMap Nominatim
-    4. Falls back to nearest sector/landmark gazetteer
+    Detailed reverse geocoding returning structured city, state, postcode, and formatted address.
+    Uses OpenStreetMap Nominatim with Google Maps Platform fallback if key configured.
     """
     api_key = get_location_api_key()
 
-    # 1. Google Maps Geocoding API
+    # 1. Google Maps Geocoding if API key is configured
     if api_key and (api_key.startswith("AIza") or len(api_key) == 39):
         try:
             url = f"https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lng}&key={api_key}"
-            resp = requests.get(url, timeout=3.0)
+            resp = requests.get(url, timeout=3.5)
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get("status") == "OK" and data.get("results"):
-                    return data["results"][0].get("formatted_address", f"Location ({lat:.4f}, {lng:.4f})")
+                    first = data["results"][0]
+                    formatted = first.get("formatted_address", f"{lat:.4f}, {lng:.4f}")
+                    city = ""
+                    state = ""
+                    postcode = ""
+                    for comp in first.get("address_components", []):
+                        types = comp.get("types", [])
+                        if "locality" in types or "administrative_area_level_2" in types:
+                            city = comp.get("long_name", "")
+                        elif "administrative_area_level_1" in types:
+                            state = comp.get("long_name", "")
+                        elif "postal_code" in types:
+                            postcode = comp.get("long_name", "")
+                    return {
+                        "latitude": lat,
+                        "longitude": lng,
+                        "address": formatted,
+                        "display_name": formatted,
+                        "city": city,
+                        "state": state,
+                        "postcode": postcode,
+                        "provider": "Google Maps Platform"
+                    }
         except Exception:
             pass
 
-    # 2. LocationIQ Geocoding API
-    if api_key and not api_key.startswith("AIza"):
-        try:
-            url = f"https://us1.locationiq.com/v1/reverse?key={api_key}&lat={lat}&lon={lng}&format=json"
-            resp = requests.get(url, timeout=3.0)
-            if resp.status_code == 200:
-                data = resp.json()
-                return data.get("display_name", f"Location ({lat:.4f}, {lng:.4f})")
-        except Exception:
-            pass
-
-    # 3. OpenStreetMap Nominatim
+    # 2. OpenStreetMap Nominatim reverse geocoding
     try:
-        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lng}"
-        headers = {"User-Agent": "RESQAI-DisasterResponseSystem/2.0"}
-        resp = requests.get(url, headers=headers, timeout=2.5)
+        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lng}&addressdetails=1"
+        resp = requests.get(url, headers=NOMINATIM_HEADERS, timeout=4.0)
         if resp.status_code == 200:
             data = resp.json()
-            return data.get("display_name", f"Location ({lat:.4f}, {lng:.4f})")
+            addr_obj = data.get("address", {})
+            city = (
+                addr_obj.get("city")
+                or addr_obj.get("town")
+                or addr_obj.get("village")
+                or addr_obj.get("suburb")
+                or addr_obj.get("county")
+                or ""
+            )
+            state = addr_obj.get("state", "")
+            postcode = addr_obj.get("postcode", "")
+            display_name = data.get("display_name", f"Location ({lat:.4f}, {lng:.4f})")
+            return {
+                "latitude": lat,
+                "longitude": lng,
+                "address": display_name,
+                "display_name": display_name,
+                "city": city,
+                "state": state,
+                "postcode": postcode,
+                "provider": "OpenStreetMap Nominatim"
+            }
     except Exception:
         pass
 
-    # 4. Nearest landmark fallback
+    # 3. Nearest landmark fallback (Pune gazetteer)
     closest_name = f"Grid Sector ({lat:.4f}, {lng:.4f})"
     min_dist = float("inf")
     for name, coords in PUNE_LANDMARKS.items():
         dist = ((coords["lat"] - lat) ** 2 + (coords["lng"] - lng) ** 2) ** 0.5
         if dist < min_dist:
             min_dist = dist
-            closest_name = f"Near {name}, Pune Sector"
-    return closest_name
+            closest_name = f"Near {name}, Maharashtra"
+
+    return {
+        "latitude": lat,
+        "longitude": lng,
+        "address": closest_name,
+        "display_name": closest_name,
+        "city": "Pune",
+        "state": "Maharashtra",
+        "postcode": "",
+        "provider": "Local Geospatial Gazetteer (Offline Fallback)"
+    }
+
+def reverse_geocode(lat: float, lng: float) -> str:
+    """Returns single human-readable string address."""
+    info = reverse_geocode_detailed(lat, lng)
+    return info.get("address", f"Location ({lat:.4f}, {lng:.4f})")
 
 def forward_geocode(query: str) -> Optional[Dict[str, Any]]:
     """
-    Forward geocodes address query to {lat, lng, address}.
+    Forward geocodes address or city query to {lat, lng, address, city, state, postcode}.
     """
     api_key = get_location_api_key()
 
-    # Google Maps Geocoding API
+    # Google Maps Geocoding
     if api_key and (api_key.startswith("AIza") or len(api_key) == 39):
         try:
             url = f"https://maps.googleapis.com/maps/api/geocode/json?address={requests.utils.quote(query)}&key={api_key}"
-            resp = requests.get(url, timeout=3.0)
+            resp = requests.get(url, timeout=3.5)
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get("status") == "OK" and data.get("results"):
-                    first = data["results"][0]
-                    loc = first["geometry"]["location"]
+                    res = data["results"][0]
+                    loc = res["geometry"]["location"]
                     return {
-                        "latitude": loc["lat"],
-                        "longitude": loc["lng"],
-                        "address": first.get("formatted_address", query)
+                        "lat": loc["lat"],
+                        "lng": loc["lng"],
+                        "address": res.get("formatted_address", query),
+                        "display_name": res.get("formatted_address", query),
+                        "provider": "Google Maps Platform"
                     }
         except Exception:
             pass
 
-    # OpenStreetMap Nominatim fallback
+    # OpenStreetMap Nominatim Search
     try:
-        url = f"https://nominatim.openstreetmap.org/search?format=json&q={requests.utils.quote(query)}&limit=1"
-        headers = {"User-Agent": "RESQAI-DisasterResponseSystem/2.0"}
-        resp = requests.get(url, headers=headers, timeout=2.5)
+        url = f"https://nominatim.openstreetmap.org/search?format=json&q={requests.utils.quote(query)}&limit=1&addressdetails=1"
+        resp = requests.get(url, headers=NOMINATIM_HEADERS, timeout=4.0)
         if resp.status_code == 200:
-            results = resp.json()
-            if results:
-                first = results[0]
+            data = resp.json()
+            if data and len(data) > 0:
+                first = data[0]
+                addr_obj = first.get("address", {})
+                city = (
+                    addr_obj.get("city")
+                    or addr_obj.get("town")
+                    or addr_obj.get("village")
+                    or addr_obj.get("county")
+                    or ""
+                )
+                state = addr_obj.get("state", "")
+                postcode = addr_obj.get("postcode", "")
                 return {
-                    "latitude": float(first["lat"]),
-                    "longitude": float(first["lon"]),
-                    "address": first.get("display_name", query)
+                    "lat": float(first["lat"]),
+                    "lng": float(first["lon"]),
+                    "address": first.get("display_name", query),
+                    "display_name": first.get("display_name", query),
+                    "city": city,
+                    "state": state,
+                    "postcode": postcode,
+                    "provider": "OpenStreetMap Nominatim"
                 }
     except Exception:
         pass
 
-    # Landmark match
+    # Match in local landmarks
+    q_lower = query.lower()
     for name, coords in PUNE_LANDMARKS.items():
-        if name.lower() in query.lower():
+        if name.lower() in q_lower or q_lower in name.lower():
             return {
-                "latitude": coords["lat"],
-                "longitude": coords["lng"],
-                "address": f"{name}, Pune"
+                "lat": coords["lat"],
+                "lng": coords["lng"],
+                "address": f"{name}, Pune, Maharashtra",
+                "display_name": f"{name}, Pune, Maharashtra",
+                "city": "Pune",
+                "state": "Maharashtra",
+                "postcode": "411004",
+                "provider": "Local Gazetteer"
             }
+
     return None

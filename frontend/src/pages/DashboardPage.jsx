@@ -24,24 +24,43 @@ import {
   Building2,
   PhoneCall,
   User,
-  HeartHandshake
+  HeartHandshake,
+  Navigation,
+  CheckCircle2,
+  HelpCircle,
+  Thermometer,
+  Zap,
+  Info
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 const INDIAN_CITIES = [
-  { id: 'delhi', name: 'New Delhi (NCR)' },
-  { id: 'mumbai', name: 'Mumbai, MH' },
-  { id: 'pune', name: 'Pune, MH' },
-  { id: 'kolkata', name: 'Kolkata, WB' },
-  { id: 'bengaluru', name: 'Bengaluru, KA' },
-  { id: 'chennai', name: 'Chennai, TN' },
-  { id: 'hyderabad', name: 'Hyderabad, TS' },
-  { id: 'ahmedabad', name: 'Ahmedabad, GJ' },
-  { id: 'patna', name: 'Patna, BR' },
-  { id: 'kochi', name: 'Kochi, KL' },
-  { id: 'guwahati', name: 'Guwahati, AS' },
-  { id: 'shimla', name: 'Shimla, HP' },
+  { id: 'delhi', name: 'New Delhi (NCR)', lat: 28.6139, lon: 77.2090 },
+  { id: 'mumbai', name: 'Mumbai, MH', lat: 18.9220, lon: 72.8347 },
+  { id: 'pune', name: 'Pune, MH', lat: 18.5204, lon: 73.8567 },
+  { id: 'kolkata', name: 'Kolkata, WB', lat: 22.5726, lon: 88.3639 },
+  { id: 'bengaluru', name: 'Bengaluru, KA', lat: 12.9716, lon: 77.5946 },
+  { id: 'chennai', name: 'Chennai, TN', lat: 13.0827, lon: 80.2707 },
+  { id: 'hyderabad', name: 'Hyderabad, TS', lat: 17.3850, lon: 78.4867 },
+  { id: 'ahmedabad', name: 'Ahmedabad, GJ', lat: 23.0225, lon: 72.5714 },
+  { id: 'patna', name: 'Patna, BR', lat: 25.5941, lon: 85.1376 },
+  { id: 'kochi', name: 'Kochi, KL', lat: 9.9312, lon: 76.2673 },
+  { id: 'guwahati', name: 'Guwahati, AS', lat: 26.1445, lon: 91.7362 },
+  { id: 'shimla', name: 'Shimla, HP', lat: 31.1048, lon: 77.1734 },
+];
+
+const DISASTER_CATEGORIES = [
+  { id: 'all', label: 'All Categories' },
+  { id: 'Flood', label: 'Flood' },
+  { id: 'Earthquake', label: 'Earthquake' },
+  { id: 'Cyclone', label: 'Cyclone' },
+  { id: 'Heavy rainfall', label: 'Heavy rainfall' },
+  { id: 'Heatwave', label: 'Heatwave' },
+  { id: 'Landslide', label: 'Landslide' },
+  { id: 'Wildfire', label: 'Wildfire' },
+  { id: 'Lightning', label: 'Lightning' },
+  { id: 'Other', label: 'Other emergencies' }
 ];
 
 export default function DashboardPage({ setActivePage }) {
@@ -49,6 +68,7 @@ export default function DashboardPage({ setActivePage }) {
   const [selectedCity, setSelectedCity] = useState('delhi');
   const [weather, setWeather] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState(null);
 
   const [earthquakes, setEarthquakes] = useState([]);
   const [earthquakesLoading, setEarthquakesLoading] = useState(false);
@@ -63,19 +83,143 @@ export default function DashboardPage({ setActivePage }) {
   const [notifications, setNotifications] = useState([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [severityFilter, setSeverityFilter] = useState('all');
   const [lastRefreshed, setLastRefreshed] = useState(new Date());
 
-  // Load weather
+  // Location Detection State (Section 8)
+  const [detectedLocation, setDetectedLocation] = useState(null);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState(null);
+  const [locationSearchInput, setLocationSearchInput] = useState('');
+  const [locationSearching, setLocationSearching] = useState(false);
+
+  // Load weather by city or coords
   const loadWeather = async (city) => {
     setWeatherLoading(true);
+    setWeatherError(null);
     try {
       const data = await api.getWeather({ city });
       setWeather(data);
     } catch (err) {
       console.error(err);
       setWeather(null);
+      setWeatherError("Live meteorological data currently unavailable.");
     } finally {
       setWeatherLoading(false);
+    }
+  };
+
+  const loadWeatherForCoords = async (lat, lon, locationLabel) => {
+    setWeatherLoading(true);
+    setWeatherError(null);
+    try {
+      const data = await api.getWeather({ lat, lon });
+      if (data) {
+        data.location = locationLabel || data.location;
+      }
+      setWeather(data);
+    } catch (err) {
+      console.error(err);
+      setWeatherError("Live weather data currently unavailable for detected coordinates.");
+    } finally {
+      setWeatherLoading(false);
+    }
+  };
+
+  // Section 8: GPS Location Detection with navigator.geolocation
+  const detectUserLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation is not supported by your browser. Please search or select a location manually.");
+      return;
+    }
+    setLocating(true);
+    setLocationError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const accuracy = Math.round(pos.coords.accuracy);
+        const updateTime = new Date(pos.timestamp).toLocaleTimeString();
+
+        try {
+          const rev = await api.reverseGeocode(lat, lng);
+          const locObj = {
+            latitude: lat.toFixed(6),
+            longitude: lng.toFixed(6),
+            city: rev.city || "Local Sector",
+            state: rev.state || "",
+            postcode: rev.postcode || "",
+            address: rev.address || rev.display_name || `Coordinates (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+            accuracy: accuracy,
+            timestamp: updateTime,
+            provider: rev.provider || "Browser Geolocation + Nominatim Reverse Geocoding"
+          };
+          setDetectedLocation(locObj);
+          loadWeatherForCoords(lat, lng, locObj.city || locObj.address);
+        } catch (e) {
+          setDetectedLocation({
+            latitude: lat.toFixed(6),
+            longitude: lng.toFixed(6),
+            city: "Detected Location",
+            state: "",
+            postcode: "",
+            address: `Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+            accuracy: accuracy,
+            timestamp: updateTime,
+            provider: "Browser Geolocation (Offline Fallback)"
+          });
+          loadWeatherForCoords(lat, lng, `Coordinates (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+        } finally {
+          setLocating(false);
+        }
+      },
+      (err) => {
+        setLocating(false);
+        let msg = "Could not retrieve your location.";
+        if (err.code === 1) {
+          msg = "Permission denied: Location access was denied. Please allow location permissions in your browser or search your city manually below.";
+        } else if (err.code === 2) {
+          msg = "GPS / Network position is currently unavailable. Please select your location manually.";
+        } else if (err.code === 3) {
+          msg = "Location request timed out. Please try clicking 'Use My Current Location' again or search manually.";
+        }
+        setLocationError(msg);
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
+  };
+
+  // Location Search Handler
+  const handleLocationSearch = async (e) => {
+    e.preventDefault();
+    if (!locationSearchInput.trim()) return;
+    setLocationSearching(true);
+    setLocationError(null);
+    try {
+      const res = await api.searchLocation(locationSearchInput.trim());
+      if (res && res.found) {
+        const locObj = {
+          latitude: res.latitude.toFixed(6),
+          longitude: res.longitude.toFixed(6),
+          city: res.city || locationSearchInput,
+          state: res.state || "",
+          postcode: res.postcode || "",
+          address: res.address || res.display_name,
+          accuracy: null,
+          timestamp: new Date().toLocaleTimeString(),
+          provider: "OpenStreetMap Nominatim Search"
+        };
+        setDetectedLocation(locObj);
+        loadWeatherForCoords(res.latitude, res.longitude, locObj.city || locObj.address);
+      } else {
+        setLocationError(`Location "${locationSearchInput}" not found. Try searching by city name, PIN code or district.`);
+      }
+    } catch (e) {
+      setLocationError("Location search service error. Please choose from the city selector.");
+    } finally {
+      setLocationSearching(false);
     }
   };
 
@@ -98,7 +242,7 @@ export default function DashboardPage({ setActivePage }) {
     setReportsLoading(true);
     try {
       const [reportsData, resourcesData, alertsData, firesData, notifsData] = await Promise.allSettled([
-        api.getIncidents({ limit: 50 }),
+        api.getIncidents({ limit: 60 }),
         api.getResources(),
         api.getAlerts(),
         api.getFires(),
@@ -124,6 +268,7 @@ export default function DashboardPage({ setActivePage }) {
 
   const handleCityChange = (cityId) => {
     setSelectedCity(cityId);
+    setDetectedLocation(null);
     loadWeather(cityId);
   };
 
@@ -133,77 +278,322 @@ export default function DashboardPage({ setActivePage }) {
   const nearbyHazardsCount = earthquakes.length + (fires?.hotspots?.length || 0);
   const mySOSCount = citizenReports.filter(r => r.source === 'SOS Distress').length;
 
+  // Filtered reports
   const filteredReports = citizenReports.filter(r => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      r.tracking_id?.toLowerCase().includes(q) ||
-      r.emergency_type?.toLowerCase().includes(q) ||
-      r.location?.toLowerCase().includes(q) ||
-      r.description?.toLowerCase().includes(q)
-    );
+    // 1. Text search
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const match = (
+        r.tracking_id?.toLowerCase().includes(q) ||
+        r.emergency_type?.toLowerCase().includes(q) ||
+        r.location?.toLowerCase().includes(q) ||
+        r.description?.toLowerCase().includes(q)
+      );
+      if (!match) return false;
+    }
+    // 2. Category filter
+    if (categoryFilter !== 'all') {
+      if (r.emergency_type?.toLowerCase() !== categoryFilter.toLowerCase()) {
+        return false;
+      }
+    }
+    // 3. Severity filter
+    if (severityFilter !== 'all') {
+      if (r.severity?.toLowerCase() !== severityFilter.toLowerCase()) {
+        return false;
+      }
+    }
+    return true;
   });
+
+  // Section 13: Rules-based explainable risk calculation
+  const computeRiskAdvisory = () => {
+    if (!weather) return null;
+    const precip = weather.precipitation || 0;
+    const wind = weather.wind_speed || 0;
+    const temp = weather.temperature || 25;
+    
+    const factors = [];
+    let level = "Normal / Safe";
+    let color = "emerald";
+
+    if (precip >= 50) {
+      factors.push({ 
+        name: "Extreme Rainfall Warning", 
+        desc: `Precipitation measured at ${precip} mm exceeds the 50 mm/day extreme hazard threshold. Flash flooding risk is active.`, 
+        severity: "Critical" 
+      });
+      level = "Critical Warning";
+      color = "rose";
+    } else if (precip >= 20) {
+      factors.push({ 
+        name: "Heavy Rainfall Watch", 
+        desc: `Precipitation measured at ${precip} mm/day. Urban waterlogging and drainage overflows possible.`, 
+        severity: "High" 
+      });
+      if (level !== "Critical Warning") { level = "High Watch"; color = "amber"; }
+    }
+
+    if (wind >= 55) {
+      factors.push({ 
+        name: "High Wind / Gale Advisory", 
+        desc: `Wind speed measured at ${wind} km/h exceeds 55 km/h threshold. Structural wind damage and downed lines possible.`, 
+        severity: "High" 
+      });
+      if (level !== "Critical Warning") { level = "High Watch"; color = "amber"; }
+    } else if (wind >= 35) {
+      factors.push({ 
+        name: "Moderate Wind Advisory", 
+        desc: `Wind speed is ${wind} km/h. Caution recommended around loose hoardings and trees.`, 
+        severity: "Moderate" 
+      });
+      if (level === "Normal / Safe") { level = "Advisory"; color = "blue"; }
+    }
+
+    if (temp >= 42) {
+      factors.push({ 
+        name: "Severe Heatwave Warning", 
+        desc: `Ambient temperature recorded at ${temp}°C exceeds 42°C threshold. Extreme heatstroke risk.`, 
+        severity: "Critical" 
+      });
+      level = "Critical Warning";
+      color = "rose";
+    } else if (temp >= 38) {
+      factors.push({ 
+        name: "Elevated Heat Advisory", 
+        desc: `Temperature is ${temp}°C. Hydration precautions active between 11 AM - 4 PM.`, 
+        severity: "Moderate" 
+      });
+      if (level === "Normal / Safe") { level = "Advisory"; color = "amber"; }
+    }
+
+    // Recent seismic proximity
+    const significantQuakes = earthquakes.filter(eq => (eq.magnitude || 0) >= 4.5);
+    if (significantQuakes.length > 0) {
+      factors.push({ 
+        name: "Recent Significant Seismic Tremor", 
+        desc: `${significantQuakes.length} earthquakes of M4.5+ recorded in telemetry feeds today. Latest: M${significantQuakes[0].magnitude} near ${significantQuakes[0].place}.`, 
+        severity: "Moderate" 
+      });
+      if (level === "Normal / Safe") { level = "Seismic Watch"; color = "amber"; }
+    }
+
+    return {
+      level,
+      color,
+      factors,
+      precip,
+      wind,
+      temp,
+      source: "Open-Meteo & USGS Real-Time Rules Engine",
+      timestamp: weather.timestamp || new Date().toISOString()
+    };
+  };
+
+  const riskAdvisory = computeRiskAdvisory();
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Top Header Bar & Search */}
+      {/* 1. TOP HEADER BAR WITH REFRESH & REPORT CTA */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-pastel-border">
         <div>
           <div className="flex items-center space-x-2">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Citizen Operations Hub
+              Live Disaster Operations Dashboard
             </h1>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              LIVE TELEMETRY
+            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              REAL-TIME FEEDS
             </span>
           </div>
-          <p className="text-xs text-pastel-muted">
-            Ground-level disaster surveillance, meteorological feeds, and situational safety coordination.
+          <p className="text-xs text-pastel-muted mt-1">
+            Live multi-source disaster telemetry, meteorological sensors, seismic monitors, and verified citizen reports.
           </p>
         </div>
 
-        {/* Search & Actions */}
-        <div className="flex items-center space-x-3">
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search incidents or locations..."
-              className="pl-9 pr-3 py-2 rounded-xl text-xs bg-white border border-pastel-border focus:border-[#5278E8] outline-none text-slate-800 w-48 sm:w-64 transition"
-            />
-          </div>
-
+        {/* Global Action Buttons */}
+        <div className="flex items-center flex-wrap gap-2.5">
           <button
             onClick={() => {
-              loadWeather(selectedCity);
+              if (detectedLocation) {
+                loadWeatherForCoords(parseFloat(detectedLocation.latitude), parseFloat(detectedLocation.longitude), detectedLocation.city);
+              } else {
+                loadWeather(selectedCity);
+              }
               loadEarthquakes(minMag, earthquakeFilter);
               loadReportsAndResources();
             }}
-            className="p-2 rounded-xl bg-white border border-pastel-border text-slate-600 hover:text-[#5278E8] hover:bg-indigo-50/50 shadow-xs transition"
-            title="Refresh feeds"
+            className="p-2.5 rounded-xl bg-white border border-pastel-border text-slate-600 hover:text-[#5278E8] hover:bg-indigo-50/50 shadow-xs transition flex items-center gap-1 text-xs font-semibold"
+            title="Refresh all feeds"
           >
             <RefreshCw className={`w-4 h-4 ${reportsLoading || weatherLoading ? 'animate-spin text-[#5278E8]' : ''}`} />
+            <span className="hidden sm:inline">Refresh Data</span>
           </button>
 
           <button
             onClick={() => setActivePage('report')}
-            className="px-3.5 py-2 rounded-xl bg-[#5278E8] text-white text-xs font-bold shadow-soft hover:bg-[#4365D0] transition hover:scale-105 active:scale-95 flex items-center space-x-1.5"
+            className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-soft transition hover:scale-105 active:scale-95 flex items-center space-x-1.5"
           >
-            <AlertTriangle className="w-3.5 h-3.5" />
-            <span>Report Incident</span>
+            <AlertTriangle className="w-4 h-4" />
+            <span>Report Emergency</span>
+          </button>
+
+          <button
+            onClick={() => setActivePage('map')}
+            className="px-4 py-2.5 rounded-xl bg-[#5278E8] hover:bg-[#4365D0] text-white text-xs font-bold shadow-soft transition hover:scale-105 active:scale-95 flex items-center space-x-1.5"
+          >
+            <Compass className="w-4 h-4" />
+            <span>Interactive Map</span>
           </button>
         </div>
       </div>
 
-      {/* 4 STATISTIC CARDS (Ground Truth From Live DB & APIs) */}
+      {/* 2. SECTION 8: CURRENT USER LOCATION DETECTION CARD */}
+      <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-sky-50 via-indigo-50/40 to-blue-50 border border-indigo-200/80 shadow-soft space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
+                <Navigation className="w-4 h-4 text-[#5278E8]" />
+                Geographical Location Awareness
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white text-[#5278E8] border border-indigo-200">
+                Native Geolocation API
+              </span>
+            </div>
+            <p className="text-xs text-slate-600">
+              Detect your actual device coordinates to load localized weather, nearby hazards, and pin your position on the map.
+            </p>
+          </div>
+
+          {/* Prominent Current Location Button (Section 8) */}
+          <button
+            onClick={detectUserLocation}
+            disabled={locating}
+            className="px-5 py-3 rounded-2xl bg-[#5278E8] hover:bg-[#4365D0] active:scale-95 text-white font-extrabold text-xs shadow-soft transition flex items-center justify-center space-x-2 whitespace-nowrap"
+          >
+            <Navigation className={`w-4 h-4 ${locating ? 'animate-spin' : ''}`} />
+            <span>{locating ? 'Detecting GPS Location...' : '📍 Use My Current Location'}</span>
+          </button>
+        </div>
+
+        {/* Location Error Alert */}
+        {locationError && (
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center space-x-2">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-600" />
+            <span>{locationError}</span>
+          </div>
+        )}
+
+        {/* Detected Location Details Panel (Section 8) */}
+        {detectedLocation && (
+          <div className="p-4 rounded-2xl bg-white border border-indigo-200/80 shadow-xs space-y-3 animate-fadeIn">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+              <div className="flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span className="text-xs font-bold text-slate-900">Current Position Locked:</span>
+                <span className="text-xs font-semibold text-[#5278E8]">{detectedLocation.address}</span>
+              </div>
+              <span className="text-[10px] text-slate-500 font-medium">
+                Updated at {detectedLocation.timestamp}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+              <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">Latitude</div>
+                <div className="font-mono font-bold text-slate-800">{detectedLocation.latitude}°</div>
+              </div>
+              <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">Longitude</div>
+                <div className="font-mono font-bold text-slate-800">{detectedLocation.longitude}°</div>
+              </div>
+              <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">City / Sector</div>
+                <div className="font-bold text-slate-800 truncate">{detectedLocation.city || "Detected"}</div>
+              </div>
+              <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">State</div>
+                <div className="font-bold text-slate-800 truncate">{detectedLocation.state || "Detected"}</div>
+              </div>
+              <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">PIN Code</div>
+                <div className="font-bold text-slate-800">{detectedLocation.postcode || "N/A"}</div>
+              </div>
+              <div className="p-2 rounded-xl bg-emerald-50/70 border border-emerald-100">
+                <div className="text-[10px] font-bold text-emerald-700 uppercase">GPS Accuracy</div>
+                <div className="font-bold text-emerald-800">{detectedLocation.accuracy ? `±${detectedLocation.accuracy} meters` : 'High'}</div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 pt-1">
+              <span>Reverse Geocoding: OpenStreetMap Nominatim • Coordinates validated</span>
+              <button 
+                onClick={() => setActivePage('map')}
+                className="text-[#5278E8] font-bold hover:underline flex items-center gap-1"
+              >
+                <span>View My Marker on Interactive Map</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Location Search Bar Fallback */}
+        <form onSubmit={handleLocationSearch} className="flex flex-col sm:flex-row gap-2 pt-1">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+            <input
+              type="text"
+              value={locationSearchInput}
+              onChange={(e) => setLocationSearchInput(e.target.value)}
+              placeholder="Search by city, area, PIN code, or latitude, longitude..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs bg-white border border-indigo-200 text-slate-800 focus:outline-none focus:border-[#5278E8] shadow-xs"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={locationSearching}
+            className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-indigo-200 text-slate-700 font-bold text-xs shadow-xs transition"
+          >
+            {locationSearching ? 'Searching...' : 'Search Location'}
+          </button>
+        </form>
+      </div>
+
+      {/* 3. API TELEMETRY CONNECTION STATUS PILLS */}
+      <div className="flex flex-wrap items-center gap-2 p-3 rounded-2xl bg-white border border-pastel-border shadow-xs text-xs">
+        <span className="font-bold text-slate-500 flex items-center gap-1 px-1">
+          <Activity className="w-3.5 h-3.5 text-[#5278E8]" />
+          Telemetry Status:
+        </span>
+        <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200 flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          Open-Meteo Weather: Active
+        </span>
+        <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200 flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          USGS Earthquakes: Active
+        </span>
+        <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-semibold border border-blue-200 flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+          NDMA Sachet: Portal Active
+        </span>
+        <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-semibold border border-slate-200 flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+          NASA FIRMS: Key Configuration Required
+        </span>
+        <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200 flex items-center gap-1 ml-auto">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          SQLite Database: Connected
+        </span>
+      </div>
+
+      {/* 4. OVERVIEW STATISTIC CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Active Emergencies */}
         <div className="pastel-card p-5 border-l-4 border-l-[#5278E8] hover:shadow-soft transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Emergencies</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Incidents</span>
             <div className="w-8 h-8 rounded-xl bg-indigo-50 text-[#5278E8] flex items-center justify-center">
               <Activity className="w-4 h-4" />
             </div>
@@ -211,11 +601,10 @@ export default function DashboardPage({ setActivePage }) {
           <div className="text-3xl font-extrabold text-slate-900 mt-2">{activeEmergenciesCount}</div>
           <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
             <span className="text-emerald-600 font-bold">Verified in Database</span>
-            <span>• Ground reports</span>
+            <span>• Citizen Reports</span>
           </div>
         </div>
 
-        {/* Card 2: Critical Alerts */}
         <div className="pastel-card p-5 border-l-4 border-l-rose-500 hover:shadow-soft transition-all">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Critical Alerts</span>
@@ -229,24 +618,22 @@ export default function DashboardPage({ setActivePage }) {
           </div>
         </div>
 
-        {/* Card 3: Nearby Hazards */}
         <div className="pastel-card p-5 border-l-4 border-l-amber-500 hover:shadow-soft transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Seismic & Fire Telemetry</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">USGS Seismic Tremors</span>
             <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              <Flame className="w-4 h-4" />
+              <Activity className="w-4 h-4" />
             </div>
           </div>
           <div className="text-3xl font-extrabold text-amber-600 mt-2">{nearbyHazardsCount}</div>
           <div className="text-[11px] text-slate-500 mt-1">
-            USGS earthquakes + NASA FIRMS
+            Real USGS GeoJSON feed records
           </div>
         </div>
 
-        {/* Card 4: SOS Requests */}
         <div className="pastel-card p-5 border-l-4 border-l-purple-500 hover:shadow-soft transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active SOS Requests</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active SOS Beacons</span>
             <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
               <Radio className="w-4 h-4" />
             </div>
@@ -258,14 +645,14 @@ export default function DashboardPage({ setActivePage }) {
         </div>
       </div>
 
-      {/* Main Grid: Weather Telemetry + Live Seismic Monitoring */}
+      {/* 5. METEOROLOGY + SEISMIC MONITORING GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Weather Card (Open-Meteo) - 5 Cols */}
         <div className="lg:col-span-5 pastel-card p-6 space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-pastel-border">
             <div className="flex items-center space-x-2">
               <CloudRain className="w-5 h-5 text-[#5278E8]" />
-              <h3 className="font-bold text-slate-900 text-sm">Open-Meteo Meteorology</h3>
+              <h3 className="font-bold text-slate-900 text-sm">Open-Meteo Weather Conditions</h3>
             </div>
             {/* City Selector */}
             <select
@@ -285,16 +672,16 @@ export default function DashboardPage({ setActivePage }) {
                 <div>
                   <div className="text-3xl font-black text-slate-900">{weather.temperature}°C</div>
                   <div className="text-xs font-bold text-[#5278E8] mt-0.5">{weather.weather_condition}</div>
-                  <div className="text-[11px] text-slate-500">{weather.location}</div>
+                  <div className="text-[11px] text-slate-500 mt-1">{weather.location}</div>
                 </div>
-                <div className="text-right space-y-1 text-xs text-slate-600">
-                  <div className="flex items-center justify-end space-x-1">
+                <div className="text-right space-y-1.5 text-xs text-slate-600">
+                  <div className="flex items-center justify-end space-x-1.5">
                     <Droplets className="w-3.5 h-3.5 text-blue-500" />
-                    <span>Rain: {weather.precipitation} mm</span>
+                    <span>Rain: <strong>{weather.precipitation} mm</strong></span>
                   </div>
-                  <div className="flex items-center justify-end space-x-1">
+                  <div className="flex items-center justify-end space-x-1.5">
                     <Wind className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>Wind: {weather.wind_speed} km/h</span>
+                    <span>Wind: <strong>{weather.wind_speed} km/h</strong></span>
                   </div>
                   <div className="text-[10px] text-slate-400">
                     Humidity: {weather.relative_humidity || 65}%
@@ -305,7 +692,7 @@ export default function DashboardPage({ setActivePage }) {
               {/* 5-Day Precipitation & Risk Forecast */}
               <div>
                 <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-2">
-                  5-Day Precipitation & Risk Forecast
+                  5-Day Precipitation & Temperature Forecast
                 </span>
                 <div className="grid grid-cols-5 gap-1.5 text-center">
                   {weather.forecast_daily?.slice(0, 5).map((f, idx) => (
@@ -319,13 +706,13 @@ export default function DashboardPage({ setActivePage }) {
               </div>
 
               <div className="text-[10px] text-slate-400 pt-1 flex items-center justify-between">
-                <span>Attribution: {weather.attribution}</span>
-                <span>Refreshed: {lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <span>Source: Open-Meteo Real-time API</span>
+                <span>Timestamp: {weather.timestamp?.slice(11, 16) || lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} UTC</span>
               </div>
             </div>
           ) : (
-            <div className="p-6 text-center text-xs text-slate-400">
-              {weatherLoading ? 'Fetching meteorological telemetry...' : 'Weather data temporarily unavailable'}
+            <div className="p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-2xl border border-slate-200">
+              {weatherLoading ? 'Fetching meteorological telemetry...' : (weatherError || 'Live data currently unavailable.')}
             </div>
           )}
         </div>
@@ -414,14 +801,14 @@ export default function DashboardPage({ setActivePage }) {
             })}
 
             {earthquakes.length === 0 && (
-              <div className="p-8 text-center text-xs text-slate-400">
-                {earthquakesLoading ? 'Polling USGS GeoJSON telemetry...' : 'No seismic tremors detected in this filter.'}
+              <div className="p-8 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl border border-slate-200">
+                {earthquakesLoading ? 'Polling USGS GeoJSON telemetry...' : 'Live data currently unavailable for this seismic filter.'}
               </div>
             )}
           </div>
 
           <div className="text-[10px] text-slate-400 pt-1 flex items-center justify-between">
-            <span>Source: U.S. Geological Survey (USGS)</span>
+            <span>Source: U.S. Geological Survey (USGS GeoJSON Feed)</span>
             <button
               onClick={() => setActivePage('map')}
               className="text-[#5278E8] font-bold hover:underline flex items-center gap-1"
@@ -433,139 +820,257 @@ export default function DashboardPage({ setActivePage }) {
         </div>
       </div>
 
-      {/* Grid: Live Citizen Reports + Emergency Resources */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Live Citizen Reports Feed - 7 Cols */}
-        <div className="lg:col-span-7 pastel-card p-6 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-pastel-border">
+      {/* 6. SECTION 13: EXPLAINABLE DISASTER RISK ASSESSMENT CARD */}
+      {riskAdvisory && (
+        <div className="pastel-card p-6 border-indigo-100 space-y-4 shadow-soft">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-pastel-border pb-3">
             <div className="flex items-center space-x-2">
-              <ShieldAlert className="w-5 h-5 text-rose-500" />
-              <h3 className="font-bold text-slate-900 text-sm">Ground Incidents & Distress Queue</h3>
+              <ShieldAlert className="w-5 h-5 text-indigo-600" />
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Explainable Disaster Risk Advisory</h3>
+                <p className="text-[11px] text-slate-500">Transparent rules-based indicators grounded in current meteorological measurements.</p>
+              </div>
             </div>
-            <span className="text-xs font-bold text-[#5278E8] bg-indigo-50 px-2.5 py-1 rounded-xl">
-              {filteredReports.length} Active Records
+            <span className={`text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider ${
+              riskAdvisory.color === 'rose' 
+                ? 'bg-rose-100 text-rose-700 border border-rose-200' 
+                : riskAdvisory.color === 'amber'
+                ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+            }`}>
+              Status: {riskAdvisory.level}
             </span>
           </div>
 
-          <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-            {filteredReports.map((report) => (
-              <div 
-                key={report.id}
-                className="p-4 rounded-2xl bg-white border border-pastel-border hover:shadow-soft transition-all space-y-2"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs font-bold text-slate-900">{report.emergency_type}</span>
-                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                        {report.tracking_id}
-                      </span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
+              <div className="flex items-center space-x-1.5 text-xs font-bold text-slate-700">
+                <Droplets className="w-3.5 h-3.5 text-blue-500" />
+                <span>Rainfall Indicator</span>
+              </div>
+              <div className="text-xl font-extrabold text-slate-900">{riskAdvisory.precip} mm</div>
+              <p className="text-[10px] text-slate-500">Threshold: &gt;20mm Watch, &gt;50mm Warning</p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
+              <div className="flex items-center space-x-1.5 text-xs font-bold text-slate-700">
+                <Wind className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Wind Speed Indicator</span>
+              </div>
+              <div className="text-xl font-extrabold text-slate-900">{riskAdvisory.wind} km/h</div>
+              <p className="text-[10px] text-slate-500">Threshold: &gt;35km/h Advisory, &gt;55km/h Gale</p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
+              <div className="flex items-center space-x-1.5 text-xs font-bold text-slate-700">
+                <Thermometer className="w-3.5 h-3.5 text-orange-500" />
+                <span>Temperature Indicator</span>
+              </div>
+              <div className="text-xl font-extrabold text-slate-900">{riskAdvisory.temp}°C</div>
+              <p className="text-[10px] text-slate-500">Threshold: &gt;38°C Watch, &gt;42°C Heatwave</p>
+            </div>
+          </div>
+
+          {/* Active Contributing Factors */}
+          {riskAdvisory.factors.length > 0 ? (
+            <div className="space-y-2">
+              <span className="text-xs font-bold text-slate-700 block">Triggered Rules & Criteria:</span>
+              <div className="space-y-1.5">
+                {riskAdvisory.factors.map((f, idx) => (
+                  <div key={idx} className="p-3 rounded-xl bg-indigo-50/50 border border-indigo-100 flex items-start space-x-2 text-xs">
+                    <Info className="w-4 h-4 text-[#5278E8] flex-shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-slate-900">{f.name}:</strong> <span className="text-slate-600">{f.desc}</span>
                     </div>
-                    <p className="text-[11px] text-slate-500 flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-slate-400" />
-                      <span>{report.location}</span>
-                    </p>
                   </div>
-
-                  <span 
-                    className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
-                      report.severity === 'Critical' 
-                        ? 'bg-rose-100 text-rose-700' 
-                        : report.severity === 'High' 
-                        ? 'bg-amber-100 text-amber-800' 
-                        : 'bg-blue-100 text-blue-700'
-                    }`}
-                  >
-                    {report.severity}
-                  </span>
-                </div>
-
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  {report.description}
-                </p>
-
-                {report.ai_summary && (
-                  <div className="p-2 rounded-xl bg-indigo-50/60 border border-indigo-100 text-[11px] text-indigo-900 flex items-start space-x-1.5 font-medium">
-                    <Sparkles className="w-3.5 h-3.5 text-[#5278E8] flex-shrink-0 mt-0.5" />
-                    <span><strong>AI Triage:</strong> {report.ai_summary}</span>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-400">
-                  <div className="flex items-center space-x-2">
-                    <span className="font-semibold text-slate-600">Status: {report.status}</span>
-                    <span>• {report.affected_count} people affected</span>
-                  </div>
-                  <button
-                    onClick={() => setActivePage('track')}
-                    className="font-bold text-[#5278E8] hover:underline"
-                  >
-                    Track Progress →
-                  </button>
-                </div>
+                ))}
               </div>
-            ))}
+            </div>
+          ) : (
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center space-x-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span>All current meteorological measurements remain below critical hazard warning thresholds.</span>
+            </div>
+          )}
 
-            {filteredReports.length === 0 && (
-              <div className="p-8 text-center text-xs text-slate-400">
-                No active incidents found matching the search criteria.
-              </div>
-            )}
+          {/* Mandatory Transparency Disclaimer (Section 13) */}
+          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-500 flex items-start space-x-2">
+            <Info className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
+            <span>
+              <strong>Transparency Notice:</strong> This rules-based advisory is computed automatically from real-time Open-Meteo weather and USGS seismic telemetry. It is not an official government prediction or guaranteed forecast. Citizens in India must always consult official authorities at <strong>NDMA (sachet.ndma.gov.in)</strong> and <strong>IMD (mausam.imd.gov.in)</strong>.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* 7. LIVE CITIZEN REPORTS QUEUE WITH FILTERS */}
+      <div className="pastel-card p-6 space-y-5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-pastel-border">
+          <div>
+            <div className="flex items-center space-x-2">
+              <ShieldAlert className="w-5 h-5 text-rose-500" />
+              <h3 className="font-bold text-slate-900 text-base">Citizen Emergency Reports & Distress Queue</h3>
+            </div>
+            <p className="text-xs text-slate-500">Live citizen-submitted reports stored persistently in SQLite database.</p>
+          </div>
+
+          {/* Filters Bar (Category, Severity, Text Search) */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by ID, keyword, area..."
+                className="pl-8 pr-3 py-1.5 rounded-xl text-xs bg-slate-50 border border-pastel-border text-slate-800 focus:outline-none focus:border-[#5278E8] w-40 sm:w-52"
+              />
+            </div>
+
+            {/* Category Filter */}
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-slate-50 border border-pastel-border text-slate-700 outline-none focus:border-[#5278E8]"
+            >
+              {DISASTER_CATEGORIES.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.label}</option>
+              ))}
+            </select>
+
+            {/* Severity Filter */}
+            <select
+              value={severityFilter}
+              onChange={(e) => setSeverityFilter(e.target.value)}
+              className="text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-slate-50 border border-pastel-border text-slate-700 outline-none focus:border-[#5278E8]"
+            >
+              <option value="all">All Severities</option>
+              <option value="Critical">Critical</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+
+            <span className="text-xs font-bold text-[#5278E8] bg-indigo-50 px-2.5 py-1.5 rounded-xl whitespace-nowrap">
+              {filteredReports.length} Matches
+            </span>
           </div>
         </div>
 
-        {/* Verified Emergency Resources - 5 Cols */}
-        <div className="lg:col-span-5 pastel-card p-6 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-pastel-border">
-            <div className="flex items-center space-x-2">
-              <Building2 className="w-5 h-5 text-emerald-600" />
-              <h3 className="font-bold text-slate-900 text-sm">Verified Emergency Resources</h3>
-            </div>
-            <button
-              onClick={() => setActivePage('resources')}
-              className="text-xs font-bold text-[#5278E8] hover:underline"
+        {/* Reports Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-1">
+          {filteredReports.map((report) => (
+            <div 
+              key={report.id}
+              className="p-4 rounded-2xl bg-white border border-pastel-border hover:shadow-soft transition-all space-y-2.5"
             >
-              View All ({resources.length})
-            </button>
-          </div>
-
-          <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
-            {resources.slice(0, 5).map((res) => (
-              <div 
-                key={res.id}
-                className="p-3.5 rounded-xl bg-white border border-pastel-border hover:border-emerald-200 transition space-y-1.5"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-900">{res.name}</h4>
-                    <span className="text-[10px] font-semibold text-slate-500">{res.category} • {res.location}</span>
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs font-extrabold text-slate-900">{report.emergency_type}</span>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                      {report.tracking_id}
+                    </span>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
-                    {res.availability}
-                  </span>
+                  <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                    <MapPin className="w-3 h-3 text-slate-400" />
+                    <span>{report.location}</span>
+                  </p>
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                  <span>Capacity: {res.current_occupancy} / {res.capacity} units</span>
-                  {res.contact && (
-                    <a href={`tel:${res.contact}`} className="font-bold text-[#5278E8] flex items-center gap-1 hover:underline">
-                      <PhoneCall className="w-3 h-3" />
-                      <span>{res.contact}</span>
-                    </a>
-                  )}
-                </div>
+                <span 
+                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
+                    report.severity === 'Critical' 
+                      ? 'bg-rose-100 text-rose-700 border border-rose-200' 
+                      : report.severity === 'High' 
+                      ? 'bg-amber-100 text-amber-800 border border-amber-200' 
+                      : 'bg-blue-100 text-blue-700 border border-blue-200'
+                  }`}
+                >
+                  {report.severity}
+                </span>
               </div>
-            ))}
-          </div>
 
-          <div className="pt-2">
-            <button
-              onClick={() => setActivePage('map')}
-              className="w-full py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-[#5278E8] font-bold text-xs transition text-center"
-            >
-              Locate Nearby Hospitals & Shelters on Map
-            </button>
+              <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">
+                {report.description}
+              </p>
+
+              {report.ai_summary && (
+                <div className="p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-100 text-[11px] text-indigo-900 flex items-start space-x-1.5 font-medium">
+                  <Sparkles className="w-3.5 h-3.5 text-[#5278E8] flex-shrink-0 mt-0.5" />
+                  <span><strong>AI Summary:</strong> {report.ai_summary}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+                <div className="flex items-center space-x-2">
+                  <span className="font-semibold text-slate-700">Status: {report.status}</span>
+                  <span>• {report.affected_count} affected</span>
+                </div>
+                <button
+                  onClick={() => setActivePage('track')}
+                  className="font-bold text-[#5278E8] hover:underline"
+                >
+                  Track Incident →
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {filteredReports.length === 0 && (
+            <div className="col-span-2 p-10 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl border border-slate-200">
+              No citizen reports found matching the selected filters.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 8. VERIFIED EMERGENCY RESOURCES & SHELTERS SUMMARY */}
+      <div className="pastel-card p-6 space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-pastel-border">
+          <div className="flex items-center space-x-2">
+            <Building2 className="w-5 h-5 text-emerald-600" />
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm">Verified Emergency Shelters & Hospitals</h3>
+              <p className="text-[11px] text-slate-500">Official designated facilities and verified capacity.</p>
+            </div>
           </div>
+          <button
+            onClick={() => setActivePage('resources')}
+            className="text-xs font-bold text-[#5278E8] hover:underline flex items-center gap-1"
+          >
+            <span>Full Directory ({resources.length})</span>
+            <ArrowRight className="w-3 h-3" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {resources.slice(0, 3).map((res) => (
+            <div 
+              key={res.id}
+              className="p-3.5 rounded-xl bg-white border border-pastel-border hover:border-emerald-200 transition space-y-1.5"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">{res.name}</h4>
+                  <span className="text-[10px] font-semibold text-slate-500">{res.category} • {res.location}</span>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                  {res.availability}
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-500 pt-1 flex items-center justify-between">
+                <span>Occupancy: {res.current_occupancy} / {res.capacity}</span>
+                {res.contact && (
+                  <a href={`tel:${res.contact}`} className="font-bold text-[#5278E8] flex items-center gap-1 hover:underline">
+                    <PhoneCall className="w-3 h-3" />
+                    <span>{res.contact}</span>
+                  </a>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

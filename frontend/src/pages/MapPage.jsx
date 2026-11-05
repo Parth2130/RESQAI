@@ -593,6 +593,14 @@ export default function MapPage() {
           </div>
         )}
       </div>
+
+      {/* Map Disclaimer (Section 9) */}
+      <div className="p-3.5 rounded-2xl bg-white border border-pastel-border shadow-xs text-xs text-slate-500 flex items-start space-x-2.5">
+        <Info className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
+        <span className="leading-relaxed">
+          <strong>Informational Map Disclaimer:</strong> Map markers, telemetry layers, and route corridors rendered via Leaflet.js and OpenStreetMap are for spatial situational awareness only. Leaflet and RESQAI do not provide certified emergency vehicle dispatch or real-time evacuation navigation. In an active emergency, always follow orders from local civil defense, NDRF, and traffic police.
+        </span>
+      </div>
     </div>
   );
 }

@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { 
   AlertTriangle, 
   MapPin, 
@@ -17,7 +19,10 @@ import {
   ArrowRight,
   Info,
   Sparkles,
-  HeartHandshake
+  HeartHandshake,
+  Image as ImageIcon,
+  Check,
+  Compass
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -53,10 +58,14 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
     image_url: ''
   });
 
+  const [locationConsent, setLocationConsent] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(null);
   const [submitError, setSubmitError] = useState(null);
   const [locating, setLocating] = useState(false);
+  const [locationAccuracy, setLocationAccuracy] = useState(null);
+  const [locationTimestamp, setLocationTimestamp] = useState(null);
+  const [showMiniMap, setShowMiniMap] = useState(false);
 
   // Tracking State
   const [searchId, setSearchId] = useState(initialTrackingId);
@@ -64,6 +73,11 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
   const [trackingLoading, setTrackingLoading] = useState(false);
   const [trackingError, setTrackingError] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  // Mini Map Refs
+  const miniMapContainerRef = useRef(null);
+  const miniMapInstanceRef = useRef(null);
+  const miniMapMarkerRef = useRef(null);
 
   useEffect(() => {
     if (initialTrackingId) {
@@ -80,10 +94,10 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
     }));
   };
 
-  // Auto-detect GPS coordinates
+  // Section 10: Button 1 — Use My Current Location (native navigator.geolocation)
   const handleDetectLocation = () => {
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser.");
+      alert("Geolocation is not supported by your browser. Please select location manually.");
       return;
     }
     setLocating(true);
@@ -91,6 +105,12 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
       async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
+        const acc = Math.round(pos.coords.accuracy);
+        const timeStr = new Date(pos.timestamp).toLocaleTimeString();
+        setLocationAccuracy(acc);
+        setLocationTimestamp(timeStr);
+        setShowMiniMap(true);
+
         let addr = "";
         try {
           const res = await api.reverseGeocode(lat, lng);
@@ -104,13 +124,83 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
           location: prev.location || addr || `Sector (${lat.toFixed(4)}, ${lng.toFixed(4)})`
         }));
         setLocating(false);
+
+        // Update mini map
+        updateMiniMapMarker(lat, lng);
       },
       (err) => {
         setLocating(false);
-        alert("Could not access your location. Please check browser permissions.");
+        let msg = "Could not access GPS location.";
+        if (err.code === 1) msg = "Location permission denied. Please allow location permissions in your browser or select location manually.";
+        else if (err.code === 2) msg = "GPS position unavailable. Please choose location manually.";
+        else if (err.code === 3) msg = "Location request timed out. Please retry or pick location manually.";
+        alert(msg);
       },
-      { timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     );
+  };
+
+  // Section 10: Button 2 — Select Location Manually
+  const handleSelectLocationManually = () => {
+    setShowMiniMap(true);
+    const defaultLat = formData.latitude ? parseFloat(formData.latitude) : 18.5204;
+    const defaultLng = formData.longitude ? parseFloat(formData.longitude) : 73.8567;
+    setFormData(prev => ({
+      ...prev,
+      latitude: prev.latitude || defaultLat.toFixed(6),
+      longitude: prev.longitude || defaultLng.toFixed(6),
+      location: prev.location || "Pune Central Sector, Maharashtra"
+    }));
+    updateMiniMapMarker(defaultLat, defaultLng);
+  };
+
+  const updateMiniMapMarker = (lat, lng) => {
+    if (!miniMapInstanceRef.current && miniMapContainerRef.current) {
+      const map = L.map(miniMapContainerRef.current, {
+        center: [lat, lng],
+        zoom: 13
+      });
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+      }).addTo(map);
+
+      const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+      marker.on('dragend', async () => {
+        const p = marker.getLatLng();
+        setFormData(prev => ({
+          ...prev,
+          latitude: p.lat.toFixed(6),
+          longitude: p.lng.toFixed(6)
+        }));
+        try {
+          const res = await api.reverseGeocode(p.lat, p.lng);
+          if (res && res.address) {
+            setFormData(prev => ({ ...prev, location: res.address }));
+          }
+        } catch {}
+      });
+
+      map.on('click', async (e) => {
+        marker.setLatLng(e.latlng);
+        setFormData(prev => ({
+          ...prev,
+          latitude: e.latlng.lat.toFixed(6),
+          longitude: e.latlng.lng.toFixed(6)
+        }));
+        try {
+          const res = await api.reverseGeocode(e.latlng.lat, e.latlng.lng);
+          if (res && res.address) {
+            setFormData(prev => ({ ...prev, location: res.address }));
+          }
+        } catch {}
+      });
+
+      miniMapInstanceRef.current = map;
+      miniMapMarkerRef.current = marker;
+    } else if (miniMapInstanceRef.current && miniMapMarkerRef.current) {
+      miniMapMarkerRef.current.setLatLng([lat, lng]);
+      miniMapInstanceRef.current.flyTo([lat, lng], 13);
+    }
   };
 
   // Submit Emergency Report
@@ -126,8 +216,8 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
         emergency_type: formData.emergency_type,
         description: formData.description.trim(),
         location: formData.location.trim(),
-        latitude: formData.latitude ? parseFloat(formData.latitude) : null,
-        longitude: formData.longitude ? parseFloat(formData.longitude) : null,
+        latitude: (locationConsent && formData.latitude) ? parseFloat(formData.latitude) : null,
+        longitude: (locationConsent && formData.longitude) ? parseFloat(formData.longitude) : null,
         severity: formData.severity,
         affected_count: parseInt(formData.affected_count, 10) || 1,
         injured_count: parseInt(formData.injured_count, 10) || 0,
@@ -245,17 +335,17 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
                   Submission Verified & AI Triaged
                 </span>
                 <h2 className="text-2xl font-extrabold text-slate-900">
-                  Incident Recorded Successfully
+                  Emergency Incident Recorded Successfully
                 </h2>
                 <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  Your report has been analyzed by Nugen AI and entered into the emergency coordination queue.
+                  Your report has been analyzed and logged in the emergency queue. You can track this report at any time using your tracking ID below.
                 </p>
               </div>
 
               {/* Unique Tracking ID Box */}
               <div className="p-4 rounded-2xl bg-slate-50 border border-pastel-border max-w-sm mx-auto space-y-2">
                 <span className="text-[11px] font-bold text-slate-400 uppercase">
-                  Your Unique Incident ID
+                  Your Unique Tracking ID
                 </span>
                 <div className="flex items-center justify-center space-x-2">
                   <span className="text-xl font-mono font-black text-[#5278E8] tracking-wider">
@@ -279,25 +369,21 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
                     <Sparkles className="w-4 h-4" />
                     <span>Nugen AI Assessment:</span>
                   </div>
-                  <p className="text-slate-700 leading-relaxed font-medium">
-                    {submitSuccess.ai_summary}
-                  </p>
+                  <p className="text-slate-700 leading-relaxed">{submitSuccess.ai_summary}</p>
                 </div>
               )}
 
-              {/* Next Steps */}
-              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
                 <button
                   onClick={() => {
                     setActiveTab('track');
                     handleTrackSubmit(submitSuccess.tracking_id);
                   }}
-                  className="px-6 py-3 rounded-xl bg-[#5278E8] hover:bg-[#4365D0] text-white font-bold text-xs shadow-soft transition flex items-center space-x-2"
+                  className="px-6 py-3 rounded-xl bg-[#5278E8] hover:bg-[#4365D0] text-white font-bold text-xs shadow-soft transition"
                 >
-                  <Search className="w-4 h-4" />
-                  <span>Track This Incident Now</span>
+                  Track This Incident Live →
                 </button>
-
                 <button
                   onClick={() => {
                     setSubmitSuccess(null);
@@ -315,6 +401,7 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
                       vulnerable_people: false,
                       image_url: ''
                     });
+                    setShowMiniMap(false);
                   }}
                   className="px-6 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition"
                 >
@@ -381,81 +468,125 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
                       }`}
                     >
                       <div className="text-xs font-bold">{sev.label}</div>
-                      <div className="text-[10px] text-slate-400 hidden sm:block">{sev.desc}</div>
+                      <div className="text-[9px] text-slate-400 mt-0.5 hidden sm:block">{sev.desc}</div>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* 3. Description Field */}
+              {/* 3. Incident Description */}
               <div>
                 <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
-                  Incident Description & Ground Details *
+                  Description of Emergency *
                 </label>
                 <textarea
+                  rows={3}
                   name="description"
                   value={formData.description}
                   onChange={handleInputChange}
-                  rows={4}
                   required
-                  placeholder="Describe the emergency: water levels, trapped residents, road blockages, structural damages, or immediate danger..."
-                  className="w-full p-3 rounded-xl border border-pastel-border text-xs sm:text-sm text-slate-800 bg-slate-50 focus:bg-white focus:border-[#5278E8] outline-none transition"
+                  placeholder="Describe the situation clearly: what happened, visible hazards, current water level, fire smoke spread, or trapped persons..."
+                  className="w-full p-3 rounded-xl border border-pastel-border text-xs sm:text-sm text-slate-800 bg-slate-50 focus:bg-white focus:border-[#5278E8] outline-none transition resize-none"
                 />
-                <span className="text-[11px] text-slate-400">
-                  Nugen AI will analyze this description to extract triage priorities and dispatch guidance.
-                </span>
               </div>
 
-              {/* 4. Location & GPS Auto-Detection */}
-              <div className="space-y-2">
+              {/* 4. Section 10: Location Integration with Two Explicit Buttons */}
+              <div className="space-y-3">
                 <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Location & Coordinates *
+                  Location Information & Coordinates *
                 </label>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <div className="relative flex-1">
-                    <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                    <input
-                      type="text"
-                      name="location"
-                      value={formData.location}
-                      onChange={handleInputChange}
-                      required
-                      placeholder="e.g. Shivaji Nagar, near Mutha river bridge, Pune"
-                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-pastel-border text-xs sm:text-sm text-slate-800 bg-slate-50 focus:bg-white focus:border-[#5278E8] outline-none transition"
-                    />
-                  </div>
 
+                {/* Two Mandatory Buttons (Section 10) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <button
                     type="button"
                     onClick={handleDetectLocation}
                     disabled={locating}
-                    className="px-4 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-[#5278E8] font-bold text-xs flex items-center justify-center space-x-1.5 transition"
+                    className="p-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-[#5278E8] font-bold text-xs flex items-center justify-center space-x-2 transition"
                   >
-                    <Navigation className={`w-3.5 h-3.5 ${locating ? 'animate-spin' : ''}`} />
-                    <span>{locating ? 'Locating...' : 'Auto-Detect GPS'}</span>
+                    <Navigation className={`w-4 h-4 ${locating ? 'animate-spin' : ''}`} />
+                    <span>{locating ? 'Detecting Device GPS...' : '📍 Use My Current Location'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSelectLocationManually}
+                    className="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-pastel-border text-slate-700 font-bold text-xs flex items-center justify-center space-x-2 transition"
+                  >
+                    <MapPin className="w-4 h-4 text-slate-500" />
+                    <span>🗺️ Select Location Manually</span>
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                {/* Readable Address Input */}
+                <div className="relative">
+                  <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   <input
-                    type="number"
-                    step="any"
-                    name="latitude"
-                    value={formData.latitude}
+                    type="text"
+                    name="location"
+                    value={formData.location}
                     onChange={handleInputChange}
-                    placeholder="Latitude (e.g. 18.5308)"
-                    className="p-2.5 rounded-xl border border-pastel-border text-xs text-slate-800 bg-slate-50"
-                  />
-                  <input
-                    type="number"
-                    step="any"
-                    name="longitude"
-                    value={formData.longitude}
-                    onChange={handleInputChange}
-                    placeholder="Longitude (e.g. 73.8475)"
-                    className="p-2.5 rounded-xl border border-pastel-border text-xs text-slate-800 bg-slate-50"
+                    required
+                    placeholder="Readable address or landmark (e.g. Near Mutha River Bridge, Shivaji Nagar, Pune)"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-pastel-border text-xs sm:text-sm text-slate-800 bg-slate-50 focus:bg-white focus:border-[#5278E8] outline-none transition"
                   />
                 </div>
+
+                {/* Latitude & Longitude */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Latitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      name="latitude"
+                      value={formData.latitude}
+                      onChange={handleInputChange}
+                      placeholder="e.g. 18.5204"
+                      className="w-full p-2.5 rounded-xl border border-pastel-border text-xs text-slate-800 bg-slate-50 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 mb-0.5">Longitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      name="longitude"
+                      value={formData.longitude}
+                      onChange={handleInputChange}
+                      placeholder="e.g. 73.8567"
+                      className="w-full p-2.5 rounded-xl border border-pastel-border text-xs text-slate-800 bg-slate-50 font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Consent Checkbox (Section 10) */}
+                <div className="flex items-start space-x-2 p-3 rounded-xl bg-blue-50/50 border border-blue-100">
+                  <input
+                    type="checkbox"
+                    id="location_consent"
+                    checked={locationConsent}
+                    onChange={(e) => setLocationConsent(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 rounded text-[#5278E8] focus:ring-indigo-400"
+                  />
+                  <label htmlFor="location_consent" className="text-xs text-slate-700 leading-relaxed cursor-pointer">
+                    <strong>Location Sharing Consent:</strong> I voluntarily consent to attach my geographical coordinates to this emergency report to assist in incident verification and spatial mapping.
+                  </label>
+                </div>
+
+                {/* Interactive Mini-Map Preview (Section 10) */}
+                {showMiniMap && (
+                  <div className="space-y-1.5 animate-fadeIn">
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span className="font-bold text-slate-700">Location Review Mini-Map</span>
+                      <span>Click anywhere or drag pin to adjust position</span>
+                    </div>
+                    <div 
+                      ref={miniMapContainerRef} 
+                      className="w-full h-48 rounded-2xl border border-pastel-border shadow-xs overflow-hidden z-10"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* 5. Metrics: People Affected & Vulnerable Groups */}
@@ -493,17 +624,35 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
                     onChange={handleInputChange}
                     className="w-4 h-4 rounded text-[#5278E8] focus:ring-indigo-400"
                   />
-                  <label htmlFor="vulnerable_people" className="text-xs font-bold text-slate-700">
+                  <label htmlFor="vulnerable_people" className="text-xs font-bold text-slate-700 cursor-pointer">
                     Children / Elderly Present
                   </label>
                 </div>
               </div>
 
-              {/* 6. Citizen Contact Information (Strictly Confidential) */}
+              {/* 6. Optional Image Attachment */}
+              <div>
+                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
+                  Optional Image URL / Photo Link
+                </label>
+                <div className="relative">
+                  <ImageIcon className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="url"
+                    name="image_url"
+                    value={formData.image_url}
+                    onChange={handleInputChange}
+                    placeholder="https://images.example.com/incident-photo.jpg"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-pastel-border text-xs text-slate-800 bg-slate-50 focus:bg-white focus:border-[#5278E8] outline-none transition"
+                  />
+                </div>
+              </div>
+
+              {/* 7. Citizen Contact Information */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
-                    Your Name *
+                    Your Full Name *
                   </label>
                   <div className="relative">
                     <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -521,7 +670,7 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
 
                 <div>
                   <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
-                    Your Contact Phone *
+                    Your Contact Number *
                   </label>
                   <div className="relative">
                     <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -538,20 +687,24 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-indigo-50/50 border border-indigo-100 text-xs text-indigo-900 flex items-center space-x-2">
-                <Info className="w-4 h-4 text-[#5278E8] flex-shrink-0" />
-                <span>
-                  <strong>Privacy Assurance:</strong> Citizen names and phone numbers are encrypted and strictly protected. They are only visible to verified rescue commanders.
-                </span>
+              {/* Mandatory Emergency Disclaimer (Section 10) */}
+              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 flex items-start space-x-2.5">
+                <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <strong className="block text-amber-950 font-bold">Important Emergency Disclaimer:</strong>
+                  <p className="leading-relaxed">
+                    "RESQAI is an informational and citizen-reporting platform. It is not an official emergency dispatch service and does not guarantee rescue assistance. In immediate danger, contact India's emergency number 112 directly."
+                  </p>
+                </div>
               </div>
 
               {/* Submit CTA */}
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-3.5 rounded-xl bg-[#5278E8] hover:bg-[#4365D0] disabled:opacity-50 text-white font-extrabold text-sm shadow-soft transition hover:scale-[1.01] active:scale-98 flex items-center justify-center space-x-2"
+                className="w-full py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-extrabold text-sm shadow-soft transition hover:scale-[1.01] active:scale-98 flex items-center justify-center space-x-2"
               >
-                <span>{submitting ? 'Transmitting Emergency Report & AI Triaging...' : 'Submit Emergency Report Now'}</span>
+                <span>{submitting ? 'Recording Report in SQLite & Generating Tracking ID...' : 'Submit Emergency Report'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </form>
@@ -559,16 +712,16 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
         </div>
       )}
 
-      {/* TAB 2: INCIDENT TRACKING PIPELINE */}
+      {/* TAB 2: INCIDENT TRACKING PIPELINE (Section 11) */}
       {activeTab === 'track' && (
         <div className="space-y-6">
           {/* Search Box */}
           <div className="pastel-card p-6 shadow-soft space-y-4">
             <h3 className="font-extrabold text-slate-900 text-base">
-              Track Incident by Tracking ID
+              Track Incident Report by Tracking ID
             </h3>
             <p className="text-xs text-pastel-muted">
-              Enter your unique tracking ID (e.g. <span className="font-mono text-[#5278E8] font-bold">RQ-2026-0001</span>) to view real-time triage status, responder notes, and dispatch progression.
+              Enter your unpredictable tracking ID (e.g. <span className="font-mono text-[#5278E8] font-bold">RQ-2026-0001</span>) to view current verification status, status history, and incident progression.
             </p>
 
             <form
@@ -606,7 +759,7 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
             )}
           </div>
 
-          {/* Tracked Report Details */}
+          {/* Tracked Report Details (Section 11: Privacy Protected) */}
           {trackedReport && (
             <div className="pastel-card p-6 sm:p-8 space-y-6 shadow-soft animate-fadeIn">
               {/* Header */}
@@ -637,75 +790,85 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
               </div>
 
               {/* 5-Stage Status Visual Pipeline */}
-              <div className="py-4">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-4">
-                  Response Progression Pipeline
+              <div className="py-2">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-3">
+                  Report Status Lifecycle
                 </span>
-                <div className="grid grid-cols-5 gap-2 text-center">
+                <div className="grid grid-cols-5 gap-2 text-center text-xs">
                   {[
-                    { name: 'New', label: '1. New' },
-                    { name: 'Under Verification', label: '2. Verifying' },
-                    { name: 'Verified', label: '3. Verified' },
-                    { name: 'Assigned', label: '4. Assigned' },
+                    { name: 'New', label: '1. Submitted' },
+                    { name: 'Under Verification', label: '2. Under Review' },
+                    { name: 'Verified', label: '3. Acknowledged' },
+                    { name: 'Assigned', label: '4. In Progress' },
                     { name: 'Resolved', label: '5. Resolved' }
-                  ].map((s, idx) => {
-                    const status = getStepStatus(s.name, trackedReport.status);
+                  ].map((step, idx) => {
+                    const statusClass = getStepStatus(step.name, trackedReport.status);
                     return (
-                      <div key={idx} className="space-y-2">
-                        <div 
-                          className={`h-2 rounded-full transition-all ${
-                            status === 'completed'
-                              ? 'bg-emerald-500'
-                              : status === 'active'
-                              ? 'bg-[#5278E8] animate-pulse'
-                              : 'bg-slate-200'
-                          }`}
-                        />
-                        <div className={`text-[10px] font-bold ${
-                          status === 'completed'
-                            ? 'text-emerald-700'
-                            : status === 'active'
-                            ? 'text-[#5278E8]'
-                            : 'text-slate-400'
-                        }`}>
-                          {s.label}
-                        </div>
+                      <div 
+                        key={idx}
+                        className={`p-2.5 rounded-xl border text-center transition ${
+                          statusClass === 'completed'
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-bold'
+                            : statusClass === 'active'
+                            ? 'bg-indigo-50 border-[#5278E8] text-[#5278E8] font-extrabold ring-2 ring-indigo-200'
+                            : 'bg-slate-50 border-slate-200 text-slate-400'
+                        }`}
+                      >
+                        <div className="text-[11px]">{step.label}</div>
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Description & Impact */}
-              <div className="space-y-3 p-4 rounded-2xl bg-slate-50 border border-pastel-border text-xs">
-                <div>
-                  <span className="font-bold text-slate-500">Incident Details:</span>
-                  <p className="text-slate-800 mt-0.5">{trackedReport.description}</p>
+              {/* Details Grid (Strict Privacy Protection - Section 11 & 19) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
+                  <span className="font-bold text-slate-700 block">Incident Metadata:</span>
+                  <div><strong>Category:</strong> {trackedReport.emergency_type}</div>
+                  <div><strong>Reported At:</strong> {trackedReport.created_at ? new Date(trackedReport.created_at).toLocaleString() : 'Recent'}</div>
+                  <div><strong>People Affected:</strong> {trackedReport.affected_count || 1}</div>
+                  <div><strong>Vulnerable Present:</strong> {trackedReport.vulnerable_people ? 'Yes' : 'No'}</div>
                 </div>
-                <div className="flex items-center space-x-4 text-slate-500">
-                  <span>Affected: {trackedReport.affected_count} people</span>
-                  <span>Injured: {trackedReport.injured_count || 0}</span>
-                  <span>Vulnerable: {trackedReport.vulnerable_people ? 'Yes' : 'No'}</span>
+
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
+                  <span className="font-bold text-slate-700 block">Current Status & Protection:</span>
+                  <div><strong>Current Status:</strong> <span className="font-bold text-[#5278E8]">{trackedReport.status}</span></div>
+                  <div><strong>Reporter Identity:</strong> <span className="text-slate-500 font-mono">Protected / Verified</span></div>
+                  <div><strong>Contact:</strong> <span className="text-slate-500 font-mono">Masked (Privacy Assured)</span></div>
+                  <div><strong>Source:</strong> {trackedReport.source || 'Citizen Report'}</div>
                 </div>
               </div>
 
-              {/* Operational Audit History */}
-              <div>
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-3">
-                  Triage & Dispatch History Log
-                </span>
-                <div className="space-y-2">
-                  {trackedReport.history?.map((h) => (
-                    <div key={h.id} className="p-3 rounded-xl bg-white border border-pastel-border text-xs space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-800">Status: {h.new_status}</span>
-                        <span className="text-[10px] text-slate-400">{h.created_at?.slice(0, 16).replace('T', ' ')} UTC</span>
+              {/* Description */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-1">
+                <span className="font-bold text-slate-700 block">Incident Summary:</span>
+                <p className="text-slate-600 leading-relaxed">{trackedReport.description}</p>
+              </div>
+
+              {/* Status History (Section 11) */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-700 block">Status Timeline & Responder Notes:</span>
+                {trackedReport.history && trackedReport.history.length > 0 ? (
+                  <div className="space-y-2">
+                    {trackedReport.history.map((h, i) => (
+                      <div key={i} className="p-3 rounded-xl bg-indigo-50/50 border border-indigo-100 text-xs flex items-start space-x-2">
+                        <Clock className="w-4 h-4 text-[#5278E8] flex-shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold text-slate-800">
+                            Status changed to <span className="text-[#5278E8]">{h.new_status}</span> by {h.updated_by || 'Control Room'}
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">{h.notes}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{new Date(h.created_at).toLocaleString()}</div>
+                        </div>
                       </div>
-                      <p className="text-slate-600 font-normal">{h.notes}</p>
-                      <div className="text-[10px] text-[#5278E8] font-semibold">Updated By: {h.updated_by}</div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-500">
+                    Initial report logged. Assigned to emergency verification triage queue.
+                  </div>
+                )}
               </div>
             </div>
           )}

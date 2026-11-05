@@ -222,41 +222,35 @@ async def generate_chat_response(
     timestamp = datetime.utcnow().isoformat() + "Z"
 
     if not is_nugen_configured():
-        # Intelligent contextual standby responses
-        msg_l = message.lower()
-        if "flood" in msg_l:
-            resp_text = (
-                "🚨 **Flood Safety Guidelines (NDMA Protocol):**\n"
-                "• **Immediate Action:** Move to higher floors or designated high ground immediately. Do NOT walk, swim, or drive through moving water.\n"
-                "• **Electricity:** Turn off main power and gas lines before water enters.\n"
-                "• **Emergency Number:** If trapped or in immediate peril, dial national emergency **112** or NDMA helpline **1070**.\n"
-                "• *(Note: RESQAI AI Assistant is currently running in Standby Mode. Configure NUGEN_API_KEY in .env for active generative LLM inference.)*"
-            )
-        elif "earthquake" in msg_l:
-            resp_text = (
-                "🚨 **Earthquake Safety Protocol (Drop, Cover, Hold):**\n"
-                "• **Indoors:** DROP to hands and knees. COVER head and neck under a sturdy table/desk. HOLD ON until shaking stops.\n"
-                "• **Avoid:** Windows, heavy bookcases, overhead fixtures, and elevators.\n"
-                "• **Outdoors:** Move to an open area away from power lines, poles, and masonry buildings.\n"
-                "• **Emergency Number:** For rescue assistance, dial **112**.\n"
-                "• *(Note: RESQAI AI Assistant is running in Standby Mode.)*"
-            )
-        else:
-            resp_text = (
-                "👋 **Welcome to RESQAI Emergency Safety Assistant**\n\n"
-                "I am here to help you navigate disaster preparedness, safety steps, and emergency reporting.\n\n"
-                "• **For Immediate Life Danger:** Call India's national emergency number **112**.\n"
-                "• **Report an Incident:** Use the 'Report Emergency' or 'SOS Distress' buttons on the portal.\n"
-                "• **Live Feeds:** Check the Live Operations Map for real-time seismic (USGS) and weather (Open-Meteo) status.\n\n"
-                "*(Note: AI Assistant is in Local Standby Mode. Configure NUGEN_API_KEY and NUGEN_MODEL in your environment for custom generative AI answers.)*"
-            )
+        config_status = []
+        key = os.getenv("NUGEN_API_KEY", NUGEN_API_KEY)
+        model = os.getenv("NUGEN_MODEL", os.getenv("NUGEN_MODEL_ID", NUGEN_MODEL_ID))
+        if not key or not key.strip():
+            config_status.append("NUGEN_API_KEY is missing")
+        if not model or not model.strip():
+            config_status.append("NUGEN_MODEL_ID is missing")
+        missing_reasons = ", ".join(config_status)
+
+        resp_text = (
+            f"⚠️ **Nugen AI Assistant Configuration Required** ({missing_reasons})\n\n"
+            "The Nugen AI Chat Completions service is not configured. As per RESQAI safety protocol, simulated or fabricated AI responses are strictly disabled.\n\n"
+            "**To enable live Nugen AI emergency intelligence:**\n"
+            "1. Open your `backend/.env` file.\n"
+            "2. Set `NUGEN_API_KEY=your_nugen_api_key`\n"
+            "3. Set `NUGEN_MODEL_ID=your_nugen_model_id`\n"
+            "4. Restart the backend service.\n\n"
+            "**Immediate Emergency Assistance:**\n"
+            "• **Life-Threatening Distress:** Call India's National Emergency Number **112** immediately.\n"
+            "• **NDMA National Disaster Helpline:** Dial **1070** or visit official portal at `sachet.ndma.gov.in`.\n"
+            "• **Emergency Ambulance:** Dial **108** | **Fire & Rescue:** Dial **101**."
+        )
 
         return {
             "configured": False,
             "response": resp_text,
             "language": language,
             "grounding": live_grounding,
-            "provider": "RESQAI Standby Safety System (Nugen Unconfigured)",
+            "provider": "Nugen AI (Unconfigured - Setup Required)",
             "timestamp": timestamp
         }
 

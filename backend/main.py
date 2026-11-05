@@ -29,7 +29,7 @@ from services.weather import fetch_weather_data
 from services.earthquakes import fetch_earthquakes_data
 from services.alerts import fetch_ndma_alerts
 from services.fires import fetch_nasa_fires
-from services.location_service import reverse_geocode, forward_geocode, get_location_api_key
+from services.location_service import reverse_geocode, reverse_geocode_detailed, forward_geocode, get_location_api_key
 from services.nugen_ai import (
     classify_emergency_report, assess_incident_risk,
     generate_chat_response, generate_response_recommendations,
@@ -643,12 +643,17 @@ def api_ai_recommend_response(
 
 @app.get("/api/location/reverse", tags=["Location"])
 def get_reverse_geocode(lat: float = Query(...), lng: float = Query(...)):
-    """Reverse geocodes GPS coordinates to human-readable address with API key support."""
-    address = reverse_geocode(lat, lng)
+    """Reverse geocodes GPS coordinates to human-readable address with City, State, PIN code."""
+    details = reverse_geocode_detailed(lat, lng)
     return {
         "latitude": lat,
         "longitude": lng,
-        "address": address,
+        "address": details.get("address", f"Sector ({lat:.4f}, {lng:.4f})"),
+        "display_name": details.get("display_name", f"Sector ({lat:.4f}, {lng:.4f})"),
+        "city": details.get("city", ""),
+        "state": details.get("state", ""),
+        "postcode": details.get("postcode", ""),
+        "provider": details.get("provider", "Nominatim"),
         "key_active": bool(get_location_api_key())
     }
 

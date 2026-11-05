@@ -291,15 +291,23 @@ export const api = {
 
     // 2. Direct OpenStreetMap Nominatim
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`, {
         headers: { 'Accept': 'application/json' }
       });
       if (res.ok) {
         const json = await res.json();
+        const addr = json.address || {};
+        const city = addr.city || addr.town || addr.village || addr.suburb || addr.county || "";
+        const state = addr.state || "";
+        const postcode = addr.postcode || "";
         return {
           latitude: lat,
           longitude: lng,
-          address: json.display_name || `Sector (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+          address: json.display_name || `Sector (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+          display_name: json.display_name || `Sector (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+          city,
+          state,
+          postcode
         };
       }
     } catch {}
@@ -307,24 +315,46 @@ export const api = {
     return {
       latitude: lat,
       longitude: lng,
-      address: `Sector (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+      address: `Sector (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+      display_name: `Sector (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+      city: "",
+      state: "",
+      postcode: ""
     };
   },
 
   async searchLocation(query) {
     const data = await safeFetch(`${API_BASE}/location/search?query=${encodeURIComponent(query)}`);
-    if (data) return data;
+    if (data && data.found) {
+      return {
+        found: true,
+        latitude: data.lat || data.latitude,
+        longitude: data.lng || data.longitude,
+        address: data.address || data.display_name,
+        display_name: data.display_name || data.address,
+        city: data.city || "",
+        state: data.state || "",
+        postcode: data.postcode || ""
+      };
+    }
 
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&addressdetails=1`);
       if (res.ok) {
         const json = await res.json();
         if (json.length > 0) {
+          const item = json[0];
+          const addr = item.address || {};
+          const city = addr.city || addr.town || addr.village || addr.county || "";
           return {
             found: true,
-            latitude: parseFloat(json[0].lat),
-            longitude: parseFloat(json[0].lon),
-            address: json[0].display_name
+            latitude: parseFloat(item.lat),
+            longitude: parseFloat(item.lon),
+            address: item.display_name,
+            display_name: item.display_name,
+            city,
+            state: addr.state || "",
+            postcode: addr.postcode || ""
           };
         }
       }

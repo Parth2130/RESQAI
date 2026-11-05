@@ -60,7 +60,7 @@ export default function AIAssistantPage({ setActivePage }) {
         ...prev,
         {
           role: 'assistant',
-          content: res.response,
+          content: res.response || res.reply || 'Response received from assistant.',
           grounding: res.grounding,
           provider: res.provider
         }
@@ -70,7 +70,7 @@ export default function AIAssistantPage({ setActivePage }) {
         ...prev,
         {
           role: 'assistant',
-          content: "Encountered a connection delay. If you are experiencing an immediate emergency, please dial 112 directly."
+          content: "Encountered a connection delay with Nugen AI. If you are experiencing an immediate emergency, please dial 112 directly."
         }
       ]);
     } finally {
@@ -79,11 +79,12 @@ export default function AIAssistantPage({ setActivePage }) {
   };
 
   const sampleQuestions = [
-    { label: "Earthquake 'Drop, Cover & Hold'", q: "Explain the Drop, Cover, and Hold protocol for earthquakes." },
-    { label: "Emergency Go-Bag Checklist", q: "What should I pack in a 72-hour family disaster emergency kit?" },
-    { label: "Flash Flood Safety Steps", q: "What immediate actions should I take when floodwaters start rising?" },
-    { label: "First-Aid for Bleeding Wounds", q: "What is the standard first-aid procedure to control severe arterial bleeding?" },
-    { label: "Cyclone Shelter Protocol", q: "What precautions should be taken before and during a severe cyclone?" }
+    { label: "Earthquake Safety", q: "What should I do during an earthquake?" },
+    { label: "Flood Safety", q: "How can I stay safe during floods?" },
+    { label: "Cyclone Precautions", q: "What precautions should I take during a cyclone?" },
+    { label: "Emergency Go-Bag Kit", q: "How do I prepare an emergency kit?" },
+    { label: "Extreme Rainfall", q: "What should I do during extreme rainfall?" },
+    { label: "Heatwave Protection", q: "How can I protect myself during a heatwave?" }
   ];
 
   return (

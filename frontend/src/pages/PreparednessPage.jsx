@@ -8,6 +8,7 @@ import {
   Mountain, 
   Zap, 
   Briefcase, 
+  CloudRain,
   CheckCircle2, 
   ExternalLink,
   ShieldCheck,
@@ -53,7 +54,7 @@ const PREPAREDNESS_DATA = [
   },
   {
     id: 'flood',
-    title: 'Flood & Heavy Rainfall',
+    title: 'Flood Safety',
     icon: Waves,
     badgeColor: 'bg-blue-50 text-blue-800 border-blue-200',
     subtitle: 'Flash floods, overflowing riverbanks, and monsoon waterlogging',
@@ -230,6 +231,36 @@ const PREPAREDNESS_DATA = [
       'Do not hold metal umbrellas, fishing rods, or agricultural tools during lightning.'
     ],
     officialLink: 'https://ndma.gov.in/Natural-Hazards/Thunderstorm-Lightning'
+  },
+  {
+    id: 'heavy-rainfall',
+    title: 'Heavy Rainfall Safety',
+    icon: CloudRain,
+    badgeColor: 'bg-cyan-50 text-cyan-800 border-cyan-200',
+    subtitle: 'Extreme monsoon downpours, urban cloudbursts, and low-lying inundation',
+    before: [
+      'Check local IMD meteorological alerts (Yellow, Orange, and Red warnings) before traveling.',
+      'Clear rooftop downspouts, storm gullies, and rainwater harvesting overflow pipes.',
+      'Charge mobile phones and power banks in advance; power cuts are common during cloudbursts.',
+      'Secure loose garden items, tin sheets, and awnings that could be dislodged by torrential runoff.'
+    ],
+    during: [
+      'Avoid sheltering under old masonry parapets, unstable compound walls, or trees during torrential rain.',
+      'Do NOT drive into waterlogged underpasses or flooded subways—water depth is deceptive.',
+      'Stay off roads during peak cloudburst downpours to allow emergency and municipal pumps to function.',
+      'Keep away from electric junction boxes, transformer plinths, and submerged street cables.'
+    ],
+    after: [
+      'Inspect exterior walls, foundations, and ceilings for seepage or structural weakening.',
+      'Boil all municipal or groundwater for at least 10 minutes before drinking.',
+      'Report submerged sewage lines or overflowing manholes to the local municipal ward office.',
+      'Safely discard food items that were submerged or came in contact with storm runoff.'
+    ],
+    precautions: [
+      'Never drive a motorized vehicle through water exceeding axle depth; water entering the exhaust will stall the engine.',
+      'Watch out for open drainage manholes hidden beneath muddy street water.'
+    ],
+    officialLink: 'https://mausam.imd.gov.in/'
   },
   {
     id: 'gobag',

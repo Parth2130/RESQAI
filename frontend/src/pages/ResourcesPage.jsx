@@ -264,6 +264,91 @@ export default function ResourcesPage() {
         </div>
       </div>
 
+      {/* Official Government Disaster Portals & Information Channels (Section 15) */}
+      <div className="pastel-card p-6 sm:p-8 space-y-4 shadow-soft">
+        <div className="flex items-center justify-between pb-3 border-b border-pastel-border">
+          <div>
+            <h3 className="font-extrabold text-slate-900 text-lg">
+              Official Government Portals & Early Warning Channels
+            </h3>
+            <p className="text-xs text-pastel-muted">
+              Direct access to verified national and state disaster management authorities.
+            </p>
+          </div>
+          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+            OFFICIAL CHANNELS
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[
+            {
+              name: 'NDMA Official Portal',
+              url: 'https://ndma.gov.in/',
+              desc: 'National Disaster Management Authority, Ministry of Home Affairs, Government of India.',
+              tag: 'Statutory Authority'
+            },
+            {
+              name: 'NDMA SACHET National Early Warning',
+              url: 'https://sachet.ndma.gov.in/',
+              desc: 'Official CAP (Common Alerting Protocol) public warning feed and live disaster bulletins.',
+              tag: 'Live Alerts'
+            },
+            {
+              name: 'IMD Mausam Meteorological Portal',
+              url: 'https://mausam.imd.gov.in/',
+              desc: 'India Meteorological Department real-time cyclone warnings, monsoon tracking and forecasts.',
+              tag: 'Weather Service'
+            },
+            {
+              name: 'USGS Earthquake Hazards Feed',
+              url: 'https://earthquake.usgs.gov/',
+              desc: 'Real-time seismic surveillance and global earthquake GeoJSON telemetry data.',
+              tag: 'Seismic Feed'
+            },
+            {
+              name: 'CWC Flood Forecast System',
+              url: 'http://ffs.india-water.gov.in/',
+              desc: 'Central Water Commission river basin flood forecasting and danger-level monitoring.',
+              tag: 'River Basin Watch'
+            },
+            {
+              name: 'NDRF Disaster Response Force',
+              url: 'https://www.ndrf.gov.in/',
+              desc: 'Specialized rescue force deployed for search, water rescue, and hazmat emergencies.',
+              tag: 'Rescue Command'
+            }
+          ].map((portal, idx) => (
+            <a
+              key={idx}
+              href={portal.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-4 rounded-2xl bg-white border border-pastel-border hover:border-indigo-300 hover:shadow-soft transition group flex flex-col justify-between space-y-2"
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 group-hover:bg-indigo-50 group-hover:text-[#5278E8] transition">
+                    {portal.tag}
+                  </span>
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#5278E8] transition" />
+                </div>
+                <h4 className="font-bold text-slate-900 text-xs sm:text-sm mt-2 group-hover:text-[#5278E8] transition">
+                  {portal.name}
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                  {portal.desc}
+                </p>
+              </div>
+              <span className="text-[10px] font-bold text-[#5278E8] flex items-center gap-1 pt-1">
+                <span>Visit Portal</span>
+                <span>→</span>
+              </span>
+            </a>
+          ))}
+        </div>
+      </div>
+
       {/* Add Resource Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
