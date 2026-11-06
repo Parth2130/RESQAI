@@ -80,6 +80,17 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
   const miniMapMarkerRef = useRef(null);
 
   useEffect(() => {
+    return () => {
+      if (miniMapInstanceRef.current) {
+        try {
+          miniMapInstanceRef.current.remove();
+        } catch {}
+        miniMapInstanceRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (initialTrackingId) {
       setSearchId(initialTrackingId);
       handleTrackSubmit(initialTrackingId);
@@ -156,6 +167,9 @@ export default function ReportPage({ initialTab = 'report', initialTrackingId = 
 
   const updateMiniMapMarker = (lat, lng) => {
     if (!miniMapInstanceRef.current && miniMapContainerRef.current) {
+      if (miniMapContainerRef.current._leaflet_id) {
+        miniMapContainerRef.current._leaflet_id = null;
+      }
       const map = L.map(miniMapContainerRef.current, {
         center: [lat, lng],
         zoom: 13

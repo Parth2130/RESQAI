@@ -104,29 +104,37 @@ export default function DashboardPage({ setActivePage }) {
   useEffect(() => {
     if (!dashboardMapContainerRef.current) return;
 
-    if (!dashboardMapInstanceRef.current) {
-      const map = L.map(dashboardMapContainerRef.current, {
-        center: [20.5937, 78.9629],
-        zoom: 5,
-        minZoom: 3,
-        maxZoom: 18,
-      });
+    try {
+      if (dashboardMapContainerRef.current._leaflet_id) {
+        dashboardMapContainerRef.current._leaflet_id = null;
+      }
 
-      // Free OpenStreetMap Standard Tiles - No API key or watermark
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
-        maxZoom: 19
-      }).addTo(map);
+      if (!dashboardMapInstanceRef.current) {
+        const map = L.map(dashboardMapContainerRef.current, {
+          center: [20.5937, 78.9629],
+          zoom: 5,
+          minZoom: 3,
+          maxZoom: 18,
+        });
 
-      dashboardMarkersLayerRef.current = L.layerGroup().addTo(map);
-      dashboardMapInstanceRef.current = map;
+        // Free OpenStreetMap Standard Tiles - No API key or watermark
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
+          maxZoom: 19
+        }).addTo(map);
 
-      // Invalidate size to ensure full tile rendering
-      setTimeout(() => {
-        if (dashboardMapInstanceRef.current) {
-          dashboardMapInstanceRef.current.invalidateSize();
-        }
-      }, 300);
+        dashboardMarkersLayerRef.current = L.layerGroup().addTo(map);
+        dashboardMapInstanceRef.current = map;
+
+        // Invalidate size to ensure full tile rendering
+        setTimeout(() => {
+          if (dashboardMapInstanceRef.current) {
+            dashboardMapInstanceRef.current.invalidateSize();
+          }
+        }, 300);
+      }
+    } catch (err) {
+      console.warn("Dashboard map initialization skipped or deferred:", err);
     }
 
     const handleResize = () => {
@@ -138,6 +146,12 @@ export default function DashboardPage({ setActivePage }) {
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      if (dashboardMapInstanceRef.current) {
+        try {
+          dashboardMapInstanceRef.current.remove();
+        } catch {}
+        dashboardMapInstanceRef.current = null;
+      }
     };
   }, []);
 
@@ -211,31 +225,43 @@ export default function DashboardPage({ setActivePage }) {
 
     // 3. Plot User Detected Location
     if (detectedLocation && detectedLocation.latitude && detectedLocation.longitude) {
-      const userIcon = L.divIcon({
-        className: 'dashboard-user-pin',
-        html: `
-          <div style="background-color: #38BDF8; width: 26px; height: 26px; border-radius: 50%; border: 3px solid #FFFFFF; box-shadow: 0 0 16px rgba(56, 189, 248, 0.9); display: flex; align-items: center; justify-content: center;">
-            <div style="background-color: #0284C7; width: 8px; height: 8px; border-radius: 50%;"></div>
+      const uLat = parseFloat(detectedLocation.latitude);
+      const uLng = parseFloat(detectedLocation.longitude);
+      if (!isNaN(uLat) && !isNaN(uLng)) {
+        const userIcon = L.divIcon({
+          className: 'dashboard-user-pin',
+          html: `
+            <div style="background-color: #38BDF8; width: 26px; height: 26px; border-radius: 50%; border: 3px solid #FFFFFF; box-shadow: 0 0 16px rgba(56, 189, 248, 0.9); display: flex; align-items: center; justify-content: center;">
+              <div style="background-color: #0284C7; width: 8px; height: 8px; border-radius: 50%;"></div>
+            </div>
+          `,
+          iconSize: [26, 26],
+          iconAnchor: [13, 13]
+        });
+        const userMarker = L.marker([uLat, uLng], { icon: userIcon });
+        userMarker.bindPopup(`
+          <div style="font-family: inherit; font-size: 12px; padding: 4px;">
+            <div style="font-weight: 800; color: #0284C7;">📍 Your Detected Position</div>
+            <div style="color: #475569; font-size: 11px; margin-top: 2px;">${detectedLocation.address || 'Device GPS'}</div>
           </div>
-        `,
-        iconSize: [26, 26],
-        iconAnchor: [13, 13]
-      });
-      const userMarker = L.marker([detectedLocation.latitude, detectedLocation.longitude], { icon: userIcon });
-      userMarker.bindPopup(`
-        <div style="font-family: inherit; font-size: 12px; padding: 4px;">
-          <div style="font-weight: 800; color: #0284C7;">📍 Your Detected Position</div>
-          <div style="color: #475569; font-size: 11px; margin-top: 2px;">${detectedLocation.address || 'Device GPS'}</div>
-        </div>
-      `);
-      layer.addLayer(userMarker);
+        `);
+        layer.addLayer(userMarker);
+      }
     }
   }, [citizenReports, earthquakes, detectedLocation]);
 
   // Fly to user coordinates on detection
   useEffect(() => {
     if (detectedLocation && dashboardMapInstanceRef.current) {
-      dashboardMapInstanceRef.current.flyTo([detectedLocation.latitude, detectedLocation.longitude], 12);
+      const uLat = parseFloat(detectedLocation.latitude);
+      const uLng = parseFloat(detectedLocation.longitude);
+      if (!isNaN(uLat) && !isNaN(uLng)) {
+        try {
+          dashboardMapInstanceRef.current.flyTo([uLat, uLng], 12);
+        } catch (e) {
+          console.warn("flyTo failed:", e);
+        }
+      }
     }
   }, [detectedLocation]);
 
@@ -823,7 +849,7 @@ export default function DashboardPage({ setActivePage }) {
               </button>
             ) : (
               <button
-                onClick={handleDetectLocation}
+                onClick={detectUserLocation}
                 disabled={locating}
                 className="text-xs font-bold px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 flex items-center space-x-1.5 transition"
               >

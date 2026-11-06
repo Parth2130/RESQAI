@@ -87,32 +87,40 @@ export default function MapPage() {
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
-    if (!mapInstanceRef.current) {
-      // 100% Free OpenStreetMap tiles - No API keys or watermarks required
-      const map = L.map(mapContainerRef.current, {
-        center: [20.5937, 78.9629],
-        zoom: 5,
-        minZoom: 3,
-        maxZoom: 19,
-      });
+    try {
+      if (mapContainerRef.current._leaflet_id) {
+        mapContainerRef.current._leaflet_id = null;
+      }
 
-      const selected = TILE_LAYERS[activeBaseLayer] || TILE_LAYERS.osm;
-      const baseLayer = L.tileLayer(selected.url, {
-        attribution: selected.attribution,
-        maxZoom: selected.maxZoom,
-      }).addTo(map);
-      tileLayerRef.current = baseLayer;
+      if (!mapInstanceRef.current) {
+        // 100% Free OpenStreetMap tiles - No API keys or watermarks required
+        const map = L.map(mapContainerRef.current, {
+          center: [20.5937, 78.9629],
+          zoom: 5,
+          minZoom: 3,
+          maxZoom: 19,
+        });
 
-      markersLayerRef.current = L.layerGroup().addTo(map);
-      routeLayerRef.current = L.layerGroup().addTo(map);
-      mapInstanceRef.current = map;
+        const selected = TILE_LAYERS[activeBaseLayer] || TILE_LAYERS.osm;
+        const baseLayer = L.tileLayer(selected.url, {
+          attribution: selected.attribution,
+          maxZoom: selected.maxZoom,
+        }).addTo(map);
+        tileLayerRef.current = baseLayer;
 
-      // Ensure full tile rendering without blank spots
-      setTimeout(() => {
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.invalidateSize();
-        }
-      }, 250);
+        markersLayerRef.current = L.layerGroup().addTo(map);
+        routeLayerRef.current = L.layerGroup().addTo(map);
+        mapInstanceRef.current = map;
+
+        // Ensure full tile rendering without blank spots
+        setTimeout(() => {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize();
+          }
+        }, 250);
+      }
+    } catch (err) {
+      console.warn("Disaster Map initialization skipped or deferred:", err);
     }
 
     const handleResize = () => {
@@ -124,6 +132,12 @@ export default function MapPage() {
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      if (mapInstanceRef.current) {
+        try {
+          mapInstanceRef.current.remove();
+        } catch {}
+        mapInstanceRef.current = null;
+      }
     };
   }, []);
 

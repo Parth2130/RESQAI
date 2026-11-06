@@ -25,6 +25,52 @@ import ProfilePage from './pages/ProfilePage';
 
 import { Bot } from 'lucide-react';
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an unhandled UI error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center">
+          <div className="p-8 max-w-md w-full bg-white rounded-3xl border border-rose-100 shadow-soft space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+              <span className="text-xl font-black">!</span>
+            </div>
+            <h2 className="text-lg font-bold text-slate-900">Live View Encountered an Issue</h2>
+            <p className="text-xs text-slate-500">
+              {this.state.error?.message || "An interface element encountered a rendering error."}
+            </p>
+            <div className="flex gap-2 justify-center pt-2">
+              <button
+                onClick={() => {
+                  this.setState({ hasError: false, error: null });
+                  if (this.props.onReset) this.props.onReset();
+                  else window.location.reload();
+                }}
+                className="px-4 py-2 rounded-xl bg-[#5278E8] text-white font-bold text-xs shadow-soft hover:bg-[#4365D0] transition"
+              >
+                Reload View
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const [activePage, setActivePage] = useState('home');
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -44,92 +90,94 @@ export default function App() {
 
         {/* 3. Main Page Routing (All 15 Connected Pages) */}
         <main className="flex-1">
-          {activePage === 'home' && (
-            <HomePage 
-              setActivePage={setActivePage} 
-              onOpenAssistant={() => setAssistantOpen(true)} 
-            />
-          )}
+          <ErrorBoundary key={activePage} onReset={() => setActivePage('home')}>
+            {activePage === 'home' && (
+              <HomePage 
+                setActivePage={setActivePage} 
+                onOpenAssistant={() => setAssistantOpen(true)} 
+              />
+            )}
 
-          {activePage === 'login' && (
-            <LoginPage 
-              setActivePage={setActivePage} 
-            />
-          )}
+            {activePage === 'login' && (
+              <LoginPage 
+                setActivePage={setActivePage} 
+              />
+            )}
 
-          {activePage === 'register' && (
-            <RegisterPage 
-              setActivePage={setActivePage} 
-            />
-          )}
+            {activePage === 'register' && (
+              <RegisterPage 
+                setActivePage={setActivePage} 
+              />
+            )}
 
-          {activePage === 'dashboard' && (
-            <DashboardPage 
-              setActivePage={setActivePage} 
-            />
-          )}
+            {activePage === 'dashboard' && (
+              <DashboardPage 
+                setActivePage={setActivePage} 
+              />
+            )}
 
-          {activePage === 'map' && (
-            <MapPage />
-          )}
+            {activePage === 'map' && (
+              <MapPage />
+            )}
 
-          {activePage === 'report' && (
-            <ReportPage 
-              initialTab="report" 
-            />
-          )}
+            {activePage === 'report' && (
+              <ReportPage 
+                initialTab="report" 
+              />
+            )}
 
-          {activePage === 'sos' && (
-            <SOSPage 
-              setActivePage={setActivePage} 
-            />
-          )}
+            {activePage === 'sos' && (
+              <SOSPage 
+                setActivePage={setActivePage} 
+              />
+            )}
 
-          {activePage === 'ai-assistant' && (
-            <AIAssistantPage 
-              setActivePage={setActivePage} 
-            />
-          )}
+            {activePage === 'ai-assistant' && (
+              <AIAssistantPage 
+                setActivePage={setActivePage} 
+              />
+            )}
 
-          {activePage === 'safety' && (
-            <PreparednessPage />
-          )}
+            {activePage === 'safety' && (
+              <PreparednessPage />
+            )}
 
-          {activePage === 'preparedness' && (
-            <PreparednessPage />
-          )}
+            {activePage === 'preparedness' && (
+              <PreparednessPage />
+            )}
 
-          {activePage === 'resources' && (
-            <ResourcesPage />
-          )}
+            {activePage === 'resources' && (
+              <ResourcesPage />
+            )}
 
-          {activePage === 'track' && (
-            <ReportPage 
-              initialTab="track" 
-            />
-          )}
+            {activePage === 'track' && (
+              <ReportPage 
+                initialTab="track" 
+              />
+            )}
 
-          {activePage === 'responder' && (
-            <ResponderDashboard 
-              setActivePage={setActivePage} 
-            />
-          )}
+            {activePage === 'responder' && (
+              <ResponderDashboard 
+                setActivePage={setActivePage} 
+              />
+            )}
 
-          {activePage === 'admin' && (
-            <AdminPage 
-              setActivePage={setActivePage} 
-            />
-          )}
+            {activePage === 'admin' && (
+              <AdminPage 
+                setActivePage={setActivePage} 
+              />
+            )}
 
-          {activePage === 'analytics' && (
-            <AnalyticsPage />
-          )}
+            {activePage === 'analytics' && (
+              <AnalyticsPage />
+            )}
 
-          {activePage === 'profile' && (
-            <ProfilePage 
-              setActivePage={setActivePage} 
-            />
-          )}
+            {activePage === 'profile' && (
+              <ProfilePage 
+                setActivePage={setActivePage} 
+              />
+            )}
+          </ErrorBoundary>
         </main>
 
         {/* 4. Floating AI Assistant Quick Trigger */}
